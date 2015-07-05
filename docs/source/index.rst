@@ -1,15 +1,10 @@
-.. nROS documentation master file, created by
-   sphinx-quickstart on Wed Mar 25 22:24:33 2015.
-   You can adapt this file completely to your liking, but it should at least
-   contain the root `toctree` directive.
-
-Welcome to nROS ``pybot_abelec`` package documentation!
-=======================================================
+Welcome to pybot-abelec package documentation!
+==============================================
 
 .. automodule:: pybot_abelec
 
-Modules
--------
+Contents
+--------
 
 .. toctree::
    :maxdepth: 3
@@ -26,3 +21,7 @@ Indices and tables
 * :ref:`modindex`
 * :ref:`search`
 
+GitHub project
+--------------
+
+https://github.com/pobot-pybot/pybot-abelec
