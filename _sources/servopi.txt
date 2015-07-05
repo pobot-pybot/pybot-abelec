@@ -1,6 +1,6 @@
 ``pybot_abelec.servopi`` module
 ===============================
 
-.. automodule:: pybot_abelec.servopi
+.. automodule:: pybot.abelec.servopi
     :members:
     :show-inheritance:

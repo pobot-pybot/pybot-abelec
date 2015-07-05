@@ -101,8 +101,299 @@
 </div>
           <div role="main" class="document">
             
-  <div class="section" id="pybot-abelec-servopi-module">
-<h1><code class="docutils literal"><span class="pre">pybot_abelec.servopi</span></code> module<a class="headerlink" href="#pybot-abelec-servopi-module" title="Permalink to this headline">¶</a></h1>
+  <div class="section" id="module-pybot.abelec.servopi">
+<span id="pybot-abelec-servopi-module"></span><h1><code class="docutils literal"><span class="pre">pybot_abelec.servopi</span></code> module<a class="headerlink" href="#module-pybot.abelec.servopi" title="Permalink to this headline">¶</a></h1>
+<p>A set of simple classes for interacting with the ServoPi board from AB Electronics
+(<a class="reference external" href="https://www.abelectronics.co.uk/products/3/Raspberry-Pi/44/Servo-Pi">https://www.abelectronics.co.uk/products/3/Raspberry-Pi/44/Servo-Pi</a>).</p>
+<p>At the end of the chain is the individual servo, provided by the class <a class="reference internal" href="#pybot.abelec.servopi.Servo" title="pybot.abelec.servopi.Servo"><code class="xref py py-class docutils literal"><span class="pre">Servo</span></code></a>.
+Instances are attached to a <code class="xref py py-class docutils literal"><span class="pre">Port</span></code>, modeling a real MCP23017 port. Ports are themselves attached to a
+<code class="xref py py-class docutils literal"><span class="pre">MCP23017</span></code>, which is itself attached to a <code class="xref py py-class docutils literal"><span class="pre">IOPiBoard</span></code>.</p>
+<p>All intricacies related to registers configuration and alike are hidden from the user,
+and a lot of things are optimized by caching instances and data for avoiding paying a too high price
+for a high level design. Even if the added overhead could seem penalizing in term of performances,
+this is not that obvious, since all the processing done here must be done somewhere anyway. There
+are thus chances that the effective penalty (if ever any) will be negligible for most of the
+applications.</p>
+<p>To allow several classes instances being used for modeling a configuration with multiple boards,
+possibly of different types, the underlying bus must be created outside and provided as a dependency
+(see documentation about de &#8220;Dependency Injection&#8221; design pattern). Being able to provide whatever
+implementation of the basic read and write operations allows the use of a fake class simulating
+real operations, which made possible to test the rest of the application on a system not having
+a SMBus resource available, such as the development station PC for instance, or providing access to
+an I2C bus using an USB adapter for instance.</p>
+<p>Here is an example of the code used for configuring and reading an input.</p>
+<div class="highlight-python"><div class="highlight"><pre><span class="gp">&gt;&gt;&gt; </span><span class="kn">from</span> <span class="nn">pybot.raspi</span> <span class="kn">import</span> <span class="n">i2c_bus</span>
+<span class="gp">&gt;&gt;&gt; </span><span class="kn">from</span> <span class="nn">pybot.abelec.adcpi</span> <span class="kn">import</span> <span class="n">ADCPiBoard</span>
+<span class="gp">&gt;&gt;&gt; </span><span class="o">...</span>
+<span class="gp">&gt;&gt;&gt; </span><span class="c"># create an instance of the board (using default I2C addresses)</span>
+<span class="gp">&gt;&gt;&gt; </span><span class="n">board</span> <span class="o">=</span> <span class="n">ServoPiBoard</span><span class="p">(</span><span class="n">i2c_bus</span><span class="p">)</span>
+<span class="gp">&gt;&gt;&gt; </span><span class="c"># define a servo, connected to channel 1 on the board header</span>
+<span class="gp">&gt;&gt;&gt; </span><span class="n">servo</span> <span class="o">=</span> <span class="n">board</span><span class="o">.</span><span class="n">get_servo</span><span class="p">(</span><span class="mi">1</span><span class="p">)</span>
+<span class="gp">&gt;&gt;&gt; </span><span class="o">...</span>
+<span class="gp">&gt;&gt;&gt; </span><span class="c"># move it to median position</span>
+<span class="gp">&gt;&gt;&gt; </span><span class="n">servo</span><span class="o">.</span><span class="n">set_position</span><span class="p">(</span><span class="mf">0.5</span><span class="p">)</span>
+</pre></div>
+</div>
+<p>Pretty simple, no ?</p>
+<p>Beyond the basic usage illustrated above, the servo instance can be configured in a lot
+of different ways :</p>
+<blockquote>
+<div><ul class="simple">
+<li>pulse durations can be set to adapt to the model, or to limit the position extent</li>
+<li>custom values can be assigned to these limits, so that instead of manipulating the
+angles in range 0 to 180, it is possible to use a percent of the total span, or
+shift the angles domain to range -90.0 to 90.0, or any convention representing
+something meaningful at the application level</li>
+</ul>
+</div></blockquote>
+<p>Refer to <a class="reference internal" href="#pybot.abelec.servopi.Servo" title="pybot.abelec.servopi.Servo"><code class="xref py py-class docutils literal"><span class="pre">Servo</span></code></a> and <a class="reference internal" href="#pybot.abelec.servopi.StopSpecification" title="pybot.abelec.servopi.StopSpecification"><code class="xref py py-class docutils literal"><span class="pre">StopSpecification</span></code></a> classes for details.</p>
+<dl class="class">
+<dt id="pybot.abelec.servopi.Servo">
+<em class="property">class </em><code class="descclassname">pybot.abelec.servopi.</code><code class="descname">Servo</code><span class="sig-paren">(</span><em>board</em>, <em>channel</em>, <em>stop_min=StopSpecification(position=0.0</em>, <em>msecs=0.6)</em>, <em>stop_max=StopSpecification(position=180.0</em>, <em>msecs=2.4)</em><span class="sig-paren">)</span><a class="reference internal" href="_modules/pybot/abelec/servopi.html#Servo"><span class="viewcode-link">[source]</span></a><a class="headerlink" href="#pybot.abelec.servopi.Servo" title="Permalink to this definition">¶</a></dt>
+<dd><p>Bases: <a class="reference external" href="https://docs.python.org/library/functions.html#object" title="(in Python v2.7)"><code class="xref py py-class docutils literal"><span class="pre">object</span></code></a></p>
+<p>Logical model of a servo controlled by the board.</p>
+<dl class="method">
+<dt id="pybot.abelec.servopi.Servo.__init__">
+<code class="descname">__init__</code><span class="sig-paren">(</span><em>board</em>, <em>channel</em>, <em>stop_min=StopSpecification(position=0.0</em>, <em>msecs=0.6)</em>, <em>stop_max=StopSpecification(position=180.0</em>, <em>msecs=2.4)</em><span class="sig-paren">)</span><a class="reference internal" href="_modules/pybot/abelec/servopi.html#Servo.__init__"><span class="viewcode-link">[source]</span></a><a class="headerlink" href="#pybot.abelec.servopi.Servo.__init__" title="Permalink to this definition">¶</a></dt>
+<dd><p>If default settings are used, the servo model is supposed to honor a standard
+0.5 to 2.5 ms pulse for a 180 degrees total horn course counted clockwise. The servo position
+will thus be given in subsequent calls as a floating point value representing the horn angle in degrees.</p>
+<p>This can be customized by specifying specific stop position definition, both in terms of pulse width
+and associated application level position value.</p>
+<table class="docutils field-list" frame="void" rules="none">
+<col class="field-name" />
+<col class="field-body" />
+<tbody valign="top">
+<tr class="field-odd field"><th class="field-name">Parameters:</th><td class="field-body"><ul class="first simple">
+<li><strong>board</strong> (<a class="reference internal" href="#pybot.abelec.servopi.ServoPiBoard" title="pybot.abelec.servopi.ServoPiBoard"><em>ServoPiBoard</em></a>) &#8211; the ServoPi board controlling the servo</li>
+<li><strong>channel</strong> (<a class="reference external" href="https://docs.python.org/library/functions.html#int" title="(in Python v2.7)"><em>int</em></a>) &#8211; the channel (1 to 16) to which the servo is connected</li>
+<li><strong>stop_min</strong> (<a class="reference internal" href="#pybot.abelec.servopi.StopSpecification" title="pybot.abelec.servopi.StopSpecification"><em>StopSpecification</em></a>) &#8211; specifications of the min stop position (position with the shorter pulse),
+if not the default one</li>
+<li><strong>stop_max</strong> (<a class="reference internal" href="#pybot.abelec.servopi.StopSpecification" title="pybot.abelec.servopi.StopSpecification"><em>StopSpecification</em></a>) &#8211; specifications of the max stop position, if not the default one</li>
+</ul>
+</td>
+</tr>
+<tr class="field-even field"><th class="field-name">Raise:</th><td class="field-body"><p class="first">ValueError if a parameter value is not valid</p>
+</td>
+</tr>
+<tr class="field-odd field"><th class="field-name">Raise:</th><td class="field-body"><p class="first last">TypeError if the stop definitions are not of the expected type</p>
+</td>
+</tr>
+</tbody>
+</table>
+</dd></dl>
+
+<dl class="attribute">
+<dt id="pybot.abelec.servopi.Servo.current_position">
+<code class="descname">current_position</code><a class="headerlink" href="#pybot.abelec.servopi.Servo.current_position" title="Permalink to this definition">¶</a></dt>
+<dd><p>The current position set point. Be aware that it can be different from the real
+position, either because it didn&#8217;t reach it already, or cannot do it.</p>
+</dd></dl>
+
+<dl class="method">
+<dt id="pybot.abelec.servopi.Servo.goto_maximum_position">
+<code class="descname">goto_maximum_position</code><span class="sig-paren">(</span><em>force=False</em><span class="sig-paren">)</span><a class="reference internal" href="_modules/pybot/abelec/servopi.html#Servo.goto_maximum_position"><span class="viewcode-link">[source]</span></a><a class="headerlink" href="#pybot.abelec.servopi.Servo.goto_maximum_position" title="Permalink to this definition">¶</a></dt>
+<dd><p>Moves the servo to its maximum position as defined by <cite>stop_max</cite> constructor parameter.</p>
+<table class="docutils field-list" frame="void" rules="none">
+<col class="field-name" />
+<col class="field-body" />
+<tbody valign="top">
+<tr class="field-odd field"><th class="field-name">Parameters:</th><td class="field-body"><strong>force</strong> (<a class="reference external" href="https://docs.python.org/library/functions.html#bool" title="(in Python v2.7)"><em>bool</em></a>) &#8211; see <a class="reference internal" href="#pybot.abelec.servopi.Servo.set_position" title="pybot.abelec.servopi.Servo.set_position"><code class="xref py py-meth docutils literal"><span class="pre">Servo.set_position()</span></code></a></td>
+</tr>
+</tbody>
+</table>
+</dd></dl>
+
+<dl class="method">
+<dt id="pybot.abelec.servopi.Servo.goto_median_position">
+<code class="descname">goto_median_position</code><span class="sig-paren">(</span><em>force=False</em><span class="sig-paren">)</span><a class="reference internal" href="_modules/pybot/abelec/servopi.html#Servo.goto_median_position"><span class="viewcode-link">[source]</span></a><a class="headerlink" href="#pybot.abelec.servopi.Servo.goto_median_position" title="Permalink to this definition">¶</a></dt>
+<dd><p>Moves the servo half way between its minimum and maximum positions.</p>
+<table class="docutils field-list" frame="void" rules="none">
+<col class="field-name" />
+<col class="field-body" />
+<tbody valign="top">
+<tr class="field-odd field"><th class="field-name">Parameters:</th><td class="field-body"><strong>force</strong> (<a class="reference external" href="https://docs.python.org/library/functions.html#bool" title="(in Python v2.7)"><em>bool</em></a>) &#8211; see <a class="reference internal" href="#pybot.abelec.servopi.Servo.set_position" title="pybot.abelec.servopi.Servo.set_position"><code class="xref py py-meth docutils literal"><span class="pre">Servo.set_position()</span></code></a></td>
+</tr>
+</tbody>
+</table>
+</dd></dl>
+
+<dl class="method">
+<dt id="pybot.abelec.servopi.Servo.goto_minimum_position">
+<code class="descname">goto_minimum_position</code><span class="sig-paren">(</span><em>force=False</em><span class="sig-paren">)</span><a class="reference internal" href="_modules/pybot/abelec/servopi.html#Servo.goto_minimum_position"><span class="viewcode-link">[source]</span></a><a class="headerlink" href="#pybot.abelec.servopi.Servo.goto_minimum_position" title="Permalink to this definition">¶</a></dt>
+<dd><p>Moves the servo to its minimum position as defined by <cite>stop_min</cite> constructor parameter.</p>
+<table class="docutils field-list" frame="void" rules="none">
+<col class="field-name" />
+<col class="field-body" />
+<tbody valign="top">
+<tr class="field-odd field"><th class="field-name">Parameters:</th><td class="field-body"><strong>force</strong> (<a class="reference external" href="https://docs.python.org/library/functions.html#bool" title="(in Python v2.7)"><em>bool</em></a>) &#8211; see <a class="reference internal" href="#pybot.abelec.servopi.Servo.set_position" title="pybot.abelec.servopi.Servo.set_position"><code class="xref py py-meth docutils literal"><span class="pre">Servo.set_position()</span></code></a></td>
+</tr>
+</tbody>
+</table>
+</dd></dl>
+
+<dl class="method">
+<dt id="pybot.abelec.servopi.Servo.relative_move">
+<code class="descname">relative_move</code><span class="sig-paren">(</span><em>d_position</em>, <em>force=False</em><span class="sig-paren">)</span><a class="reference internal" href="_modules/pybot/abelec/servopi.html#Servo.relative_move"><span class="viewcode-link">[source]</span></a><a class="headerlink" href="#pybot.abelec.servopi.Servo.relative_move" title="Permalink to this definition">¶</a></dt>
+<dd><p>Moves the servo by a relative amount from its current set point.</p>
+<p>This method requires an absolute position being previously set.</p>
+<table class="docutils field-list" frame="void" rules="none">
+<col class="field-name" />
+<col class="field-body" />
+<tbody valign="top">
+<tr class="field-odd field"><th class="field-name">Parameters:</th><td class="field-body"><ul class="first last simple">
+<li><strong>d_position</strong> (<a class="reference external" href="https://docs.python.org/library/functions.html#float" title="(in Python v2.7)"><em>float</em></a>) &#8211; the relative move, provided in application logical unit</li>
+<li><strong>force</strong> (<a class="reference external" href="https://docs.python.org/library/functions.html#bool" title="(in Python v2.7)"><em>bool</em></a>) &#8211; see <a class="reference internal" href="#pybot.abelec.servopi.Servo.set_position" title="pybot.abelec.servopi.Servo.set_position"><code class="xref py py-meth docutils literal"><span class="pre">Servo.set_position()</span></code></a></li>
+</ul>
+</td>
+</tr>
+</tbody>
+</table>
+</dd></dl>
+
+<dl class="method">
+<dt id="pybot.abelec.servopi.Servo.set_floating">
+<code class="descname">set_floating</code><span class="sig-paren">(</span><span class="sig-paren">)</span><a class="reference internal" href="_modules/pybot/abelec/servopi.html#Servo.set_floating"><span class="viewcode-link">[source]</span></a><a class="headerlink" href="#pybot.abelec.servopi.Servo.set_floating" title="Permalink to this definition">¶</a></dt>
+<dd><p>Puts the servo in floating mode by deactivating pulses generation.</p>
+</dd></dl>
+
+<dl class="method">
+<dt id="pybot.abelec.servopi.Servo.set_position">
+<code class="descname">set_position</code><span class="sig-paren">(</span><em>position</em>, <em>force=False</em><span class="sig-paren">)</span><a class="reference internal" href="_modules/pybot/abelec/servopi.html#Servo.set_position"><span class="viewcode-link">[source]</span></a><a class="headerlink" href="#pybot.abelec.servopi.Servo.set_position" title="Permalink to this definition">¶</a></dt>
+<dd><p>Moves the servo to the given position.</p>
+<p>No move is done if the requested position is the same as the current one,
+except if the <cite>force</cite> parameter is set to True.</p>
+<table class="docutils field-list" frame="void" rules="none">
+<col class="field-name" />
+<col class="field-body" />
+<tbody valign="top">
+<tr class="field-odd field"><th class="field-name">Parameters:</th><td class="field-body"><ul class="first last simple">
+<li><strong>position</strong> (<a class="reference external" href="https://docs.python.org/library/functions.html#float" title="(in Python v2.7)"><em>float</em></a>) &#8211; the servo position (see <a class="reference internal" href="#pybot.abelec.servopi.Servo.__init__" title="pybot.abelec.servopi.Servo.__init__"><code class="xref py py-meth docutils literal"><span class="pre">Servo.__init__()</span></code></a> documentation for
+possible values</li>
+<li><strong>force</strong> (<a class="reference external" href="https://docs.python.org/library/functions.html#bool" title="(in Python v2.7)"><em>bool</em></a>) &#8211; if True, the move process will be engaged, whatever is the current position</li>
+</ul>
+</td>
+</tr>
+</tbody>
+</table>
+</dd></dl>
+
+</dd></dl>
+
+<dl class="class">
+<dt id="pybot.abelec.servopi.ServoPiBoard">
+<em class="property">class </em><code class="descclassname">pybot.abelec.servopi.</code><code class="descname">ServoPiBoard</code><span class="sig-paren">(</span><em>bus</em>, <em>i2c_addr=64</em>, <em>pwm_freq=60</em>, <em>use_output_enable=False</em><span class="sig-paren">)</span><a class="reference internal" href="_modules/pybot/abelec/servopi.html#ServoPiBoard"><span class="viewcode-link">[source]</span></a><a class="headerlink" href="#pybot.abelec.servopi.ServoPiBoard" title="Permalink to this definition">¶</a></dt>
+<dd><p>Bases: <a class="reference external" href="https://docs.python.org/library/functions.html#object" title="(in Python v2.7)"><code class="xref py py-class docutils literal"><span class="pre">object</span></code></a></p>
+<p>Models the ServoPi board.</p>
+<p>In addition to global configuration and chip dialogs, it provides a factory method to
+obtain Servo instances attached to it. Returned instances are cached for optimizing
+identical requests.</p>
+<dl class="method">
+<dt id="pybot.abelec.servopi.ServoPiBoard.__init__">
+<code class="descname">__init__</code><span class="sig-paren">(</span><em>bus</em>, <em>i2c_addr=64</em>, <em>pwm_freq=60</em>, <em>use_output_enable=False</em><span class="sig-paren">)</span><a class="reference internal" href="_modules/pybot/abelec/servopi.html#ServoPiBoard.__init__"><span class="viewcode-link">[source]</span></a><a class="headerlink" href="#pybot.abelec.servopi.ServoPiBoard.__init__" title="Permalink to this definition">¶</a></dt>
+<dd><table class="docutils field-list" frame="void" rules="none">
+<col class="field-name" />
+<col class="field-body" />
+<tbody valign="top">
+<tr class="field-odd field"><th class="field-name">Parameters:</th><td class="field-body"><ul class="first last simple">
+<li><strong>bus</strong> &#8211; the I2C/SMBus the board is connected to</li>
+<li><strong>i2c_addr</strong> (<a class="reference external" href="https://docs.python.org/library/functions.html#int" title="(in Python v2.7)"><em>int</em></a>) &#8211; the board I2C address</li>
+<li><strong>pwm_freq</strong> (<a class="reference external" href="https://docs.python.org/library/functions.html#int" title="(in Python v2.7)"><em>int</em></a>) &#8211; the PWM frequency</li>
+<li><strong>use_output_enable</strong> (<a class="reference external" href="https://docs.python.org/library/functions.html#bool" title="(in Python v2.7)"><em>bool</em></a>) &#8211; set to True if we want to use the output enable signal of the
+PCA9685 chip. Remember to short the OE pads on the board in this case.</li>
+</ul>
+</td>
+</tr>
+</tbody>
+</table>
+</dd></dl>
+
+<dl class="method">
+<dt id="pybot.abelec.servopi.ServoPiBoard.disable_all">
+<code class="descname">disable_all</code><span class="sig-paren">(</span><span class="sig-paren">)</span><a class="reference internal" href="_modules/pybot/abelec/servopi.html#ServoPiBoard.disable_all"><span class="viewcode-link">[source]</span></a><a class="headerlink" href="#pybot.abelec.servopi.ServoPiBoard.disable_all" title="Permalink to this definition">¶</a></dt>
+<dd><p>Disables all the chip outputs</p>
+</dd></dl>
+
+<dl class="method">
+<dt id="pybot.abelec.servopi.ServoPiBoard.enable_all">
+<code class="descname">enable_all</code><span class="sig-paren">(</span><span class="sig-paren">)</span><a class="reference internal" href="_modules/pybot/abelec/servopi.html#ServoPiBoard.enable_all"><span class="viewcode-link">[source]</span></a><a class="headerlink" href="#pybot.abelec.servopi.ServoPiBoard.enable_all" title="Permalink to this definition">¶</a></dt>
+<dd><p>Enables all the chip outputs</p>
+</dd></dl>
+
+<dl class="method">
+<dt id="pybot.abelec.servopi.ServoPiBoard.get_servo">
+<code class="descname">get_servo</code><span class="sig-paren">(</span><em>channel</em>, <em>stop_min=StopSpecification(position=0.0</em>, <em>msecs=0.6)</em>, <em>stop_max=StopSpecification(position=180.0</em>, <em>msecs=2.4)</em><span class="sig-paren">)</span><a class="reference internal" href="_modules/pybot/abelec/servopi.html#ServoPiBoard.get_servo"><span class="viewcode-link">[source]</span></a><a class="headerlink" href="#pybot.abelec.servopi.ServoPiBoard.get_servo" title="Permalink to this definition">¶</a></dt>
+<dd><p>Factory method returning an instance of the class <a class="reference internal" href="#pybot.abelec.servopi.Servo" title="pybot.abelec.servopi.Servo"><code class="xref py py-meth docutils literal"><span class="pre">Servo()</span></code></a> with the given
+configuration.</p>
+<p>Instances are cached for optimization.
+:param int channel: channel number (1-16) to which the servo is connected
+:param StopSpecification stop_min: see <a class="reference internal" href="#pybot.abelec.servopi.Servo" title="pybot.abelec.servopi.Servo"><code class="xref py py-class docutils literal"><span class="pre">Servo</span></code></a> constructor
+:param StopSpecification stop_max: see <a class="reference internal" href="#pybot.abelec.servopi.Servo" title="pybot.abelec.servopi.Servo"><code class="xref py py-class docutils literal"><span class="pre">Servo</span></code></a> constructor
+:return: a Servo instance
+:raise: ValueError is invalid channel number</p>
+</dd></dl>
+
+<dl class="method">
+<dt id="pybot.abelec.servopi.ServoPiBoard.ms_to_reg">
+<code class="descname">ms_to_reg</code><span class="sig-paren">(</span><em>ms</em><span class="sig-paren">)</span><a class="reference internal" href="_modules/pybot/abelec/servopi.html#ServoPiBoard.ms_to_reg"><span class="viewcode-link">[source]</span></a><a class="headerlink" href="#pybot.abelec.servopi.ServoPiBoard.ms_to_reg" title="Permalink to this definition">¶</a></dt>
+<dd><p>Convenience method for converting a duration to the corresponding register encoding value.
+:param float ms: duration to convert
+:return: corresponding register encoded value
+:rtype: int</p>
+</dd></dl>
+
+<dl class="method">
+<dt id="pybot.abelec.servopi.ServoPiBoard.read_reg">
+<code class="descname">read_reg</code><span class="sig-paren">(</span><em>reg</em><span class="sig-paren">)</span><a class="reference internal" href="_modules/pybot/abelec/servopi.html#ServoPiBoard.read_reg"><span class="viewcode-link">[source]</span></a><a class="headerlink" href="#pybot.abelec.servopi.ServoPiBoard.read_reg" title="Permalink to this definition">¶</a></dt>
+<dd><p>Chip register getter</p>
+</dd></dl>
+
+<dl class="method">
+<dt id="pybot.abelec.servopi.ServoPiBoard.set_pwm_freq">
+<code class="descname">set_pwm_freq</code><span class="sig-paren">(</span><em>hz</em><span class="sig-paren">)</span><a class="reference internal" href="_modules/pybot/abelec/servopi.html#ServoPiBoard.set_pwm_freq"><span class="viewcode-link">[source]</span></a><a class="headerlink" href="#pybot.abelec.servopi.ServoPiBoard.set_pwm_freq" title="Permalink to this definition">¶</a></dt>
+<dd><p>Configures the PWM frequency
+:param int hz: frequency</p>
+</dd></dl>
+
+<dl class="method">
+<dt id="pybot.abelec.servopi.ServoPiBoard.shutdown">
+<code class="descname">shutdown</code><span class="sig-paren">(</span><span class="sig-paren">)</span><a class="reference internal" href="_modules/pybot/abelec/servopi.html#ServoPiBoard.shutdown"><span class="viewcode-link">[source]</span></a><a class="headerlink" href="#pybot.abelec.servopi.ServoPiBoard.shutdown" title="Permalink to this definition">¶</a></dt>
+<dd><p>Puts all servos in floating mode and disables PCA9685 outputs.</p>
+</dd></dl>
+
+<dl class="method">
+<dt id="pybot.abelec.servopi.ServoPiBoard.write_reg">
+<code class="descname">write_reg</code><span class="sig-paren">(</span><em>reg</em>, <em>value</em><span class="sig-paren">)</span><a class="reference internal" href="_modules/pybot/abelec/servopi.html#ServoPiBoard.write_reg"><span class="viewcode-link">[source]</span></a><a class="headerlink" href="#pybot.abelec.servopi.ServoPiBoard.write_reg" title="Permalink to this definition">¶</a></dt>
+<dd><p>Chip register setter</p>
+</dd></dl>
+
+</dd></dl>
+
+<dl class="class">
+<dt id="pybot.abelec.servopi.StopSpecification">
+<em class="property">class </em><code class="descclassname">pybot.abelec.servopi.</code><code class="descname">StopSpecification</code><a class="reference internal" href="_modules/pybot/abelec/servopi.html#StopSpecification"><span class="viewcode-link">[source]</span></a><a class="headerlink" href="#pybot.abelec.servopi.StopSpecification" title="Permalink to this definition">¶</a></dt>
+<dd><p>Bases: <a class="reference internal" href="#pybot.abelec.servopi.StopSpecification" title="pybot.abelec.servopi.StopSpecification"><code class="xref py py-class docutils literal"><span class="pre">pybot.abelec.servopi.StopSpecification</span></code></a></p>
+<p>A named tuple defining a stop position (i.e. extent limit) of the servo.</p>
+<p>The position is defined by the corresponding pulse duration and the associated
+position. This value can be an angle in degrees or a linear position depending on the
+servo type (rotation or linear motion).</p>
+<p>Using pulse durations inside the physical limits of the servo provides a software extent
+limitation, since the effective orders sent to the servo will never be outside this limited
+range.</p>
+<p>It is possible to inverse the rotation from its normal setting by reversing the values of
+the stop positions.</p>
+<p>An order relation is defined, based on the pulse duration (since the logical position can
+be in reverse direction). The equality relation is based on both instance attributes.</p>
+<dl class="method">
+<dt id="pybot.abelec.servopi.StopSpecification.scale">
+<code class="descname">scale</code><span class="sig-paren">(</span><em>factor</em><span class="sig-paren">)</span><a class="reference internal" href="_modules/pybot/abelec/servopi.html#StopSpecification.scale"><span class="viewcode-link">[source]</span></a><a class="headerlink" href="#pybot.abelec.servopi.StopSpecification.scale" title="Permalink to this definition">¶</a></dt>
+<dd><p>Returns a scaled instance by multiplying both attributes by a given factor.
+:param float factor: scaling factor
+:return: a new instance, with attributes set to the original ones scaled</p>
+</dd></dl>
+
+</dd></dl>
+
 </div>
 
 

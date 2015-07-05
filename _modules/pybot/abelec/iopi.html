@@ -1,0 +1,711 @@
+
+
+<!DOCTYPE html>
+<!--[if IE 8]><html class="no-js lt-ie9" lang="en" > <![endif]-->
+<!--[if gt IE 8]><!--> <html class="no-js" lang="en" > <!--<![endif]-->
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  
+  <title>pybot.abelec.iopi &mdash; pybot-abelec from POBOT 1.0 documentation</title>
+  
+
+  
+  
+
+  
+  <link href='https://fonts.googleapis.com/css?family=Lato:400,700,400italic,700italic|Roboto+Slab:400,700|Inconsolata:400,700&subset=latin,cyrillic' rel='stylesheet' type='text/css'>
+
+  
+  
+    
+
+  
+
+  
+  
+    <link rel="stylesheet" href="../../../_static/css/theme.css" type="text/css" />
+  
+
+  
+
+  
+    <link rel="top" title="pybot-abelec from POBOT 1.0 documentation" href="../../../index.html"/>
+        <link rel="up" title="Module code" href="../../index.html"/> 
+
+  
+  <script src="https://cdnjs.cloudflare.com/ajax/libs/modernizr/2.6.2/modernizr.min.js"></script>
+
+</head>
+
+<body class="wy-body-for-nav" role="document">
+
+  <div class="wy-grid-for-nav">
+
+    
+    <nav data-toggle="wy-nav-shift" class="wy-nav-side">
+      <div class="wy-side-nav-search">
+        
+          <a href="../../../index.html" class="fa fa-home"> pybot-abelec from POBOT</a>
+        
+        
+<div role="search">
+  <form id="rtd-search-form" class="wy-form" action="../../../search.html" method="get">
+    <input type="text" name="q" placeholder="Search docs" />
+    <input type="hidden" name="check_keywords" value="yes" />
+    <input type="hidden" name="area" value="default" />
+  </form>
+</div>
+      </div>
+
+      <div class="wy-menu wy-menu-vertical" data-spy="affix" role="navigation" aria-label="main navigation">
+        
+          
+          
+              <ul>
+<li class="toctree-l1"><a class="reference internal" href="../../../adcpi.html"><code class="docutils literal"><span class="pre">pybot_abelec.adcpi</span></code> module</a></li>
+<li class="toctree-l1"><a class="reference internal" href="../../../iopi.html"><code class="docutils literal"><span class="pre">pybot_abelec.iopi</span></code> module</a></li>
+<li class="toctree-l1"><a class="reference internal" href="../../../servopi.html"><code class="docutils literal"><span class="pre">pybot_abelec.servopi</span></code> module</a></li>
+</ul>
+
+          
+        
+      </div>
+      &nbsp;
+    </nav>
+
+    <section data-toggle="wy-nav-shift" class="wy-nav-content-wrap">
+
+      
+      <nav class="wy-nav-top" role="navigation" aria-label="top navigation">
+        <i data-toggle="wy-nav-top" class="fa fa-bars"></i>
+        <a href="../../../index.html">pybot-abelec from POBOT</a>
+      </nav>
+
+
+      
+      <div class="wy-nav-content">
+        <div class="rst-content">
+          <div role="navigation" aria-label="breadcrumbs navigation">
+  <ul class="wy-breadcrumbs">
+    <li><a href="../../../index.html">Docs</a> &raquo;</li>
+      
+          <li><a href="../../index.html">Module code</a> &raquo;</li>
+      
+    <li>pybot.abelec.iopi</li>
+      <li class="wy-breadcrumbs-aside">
+        
+      </li>
+  </ul>
+  <hr/>
+</div>
+          <div role="main" class="document">
+            
+  <h1>Source code for pybot.abelec.iopi</h1><div class="highlight"><pre>
+<span class="c"># -*- coding: utf-8 -*-</span>
+
+<span class="sd">&quot;&quot;&quot; A set of simple classes for interacting with the IOPi board from AB Electronics</span>
+<span class="sd">(https://www.abelectronics.co.uk/products/3/Raspberry-Pi/18/IO-Pi).</span>
+
+<span class="sd">At the end of the chain is the individual IO, provided by the classes :py:class:`DigitalInput`</span>
+<span class="sd">and :py:class:`DigitalOutput` (they will ease the transition for Arduino fans ;). IO instances</span>
+<span class="sd">are attached to a :py:class:`Port`, modeling a real MCP23017 port. Ports are themselves attached to a</span>
+<span class="sd">:py:class:`MCP23017`, which is itself attached to a :py:class:`IOPiBoard`.</span>
+
+<span class="sd">All these intricacies such as bit masking on register values and alike are hidden from the user,</span>
+<span class="sd">and a lot of things are optimized by caching instances and data for avoiding paying too high a price</span>
+<span class="sd">for a high level design. Even if the added overhead could seem penalizing in term of performances,</span>
+<span class="sd">this is not that obvious, since all the processing done here must be done somewhere anyway. There</span>
+<span class="sd">are thus chances that the effective penalty (if ever any) will be negligible for most of the</span>
+<span class="sd">applications.</span>
+
+<span class="sd">To allow several classes instances being used for modeling a configuration with multiple boards,</span>
+<span class="sd">possibly of different types, the underlying bus must be created outside and provided as a dependency</span>
+<span class="sd">(see documentation about de &quot;Dependency Injection&quot; design pattern). Being able to provide whatever</span>
+<span class="sd">implementation of the basic read and write operations allows the use of a fake class simulating</span>
+<span class="sd">real operations, which made possible to test the rest of the application on a system not having</span>
+<span class="sd">a SMBus resource available, such as the development station PC for instance, or providing access to</span>
+<span class="sd">an I2C bus using an USB adapter for instance. For examples of this, have a look at our i2c module</span>
+<span class="sd">(https://github.com/Pobot/PyBot/blob/master/pybot/i2c.py). We have included there an enhanced smbus</span>
+<span class="sd">class (:py:class:`pybot.i2c.SMBusI2CBus`), taking care of serializing I/O operations, in case of</span>
+<span class="sd">multi-threaded usage.</span>
+
+<span class="sd">Here is an example of the code used for controlling a LED connected to pin 3 of IC_1 expander</span>
+<span class="sd">header. We suppose that the LED is wired in positive logic, i.e. lightened when the IO is high.</span>
+
+<span class="sd">&gt;&gt;&gt; from pybot.raspi import i2c_bus</span>
+<span class="sd">&gt;&gt;&gt; from pybot.abelec.iopi import IOPiBoard</span>
+<span class="sd">&gt;&gt;&gt; ...</span>
+<span class="sd">&gt;&gt;&gt; # create an instance of the board</span>
+<span class="sd">&gt;&gt;&gt; board = IOPiBoard(i2c_bus)</span>
+<span class="sd">&gt;&gt;&gt; # define an output IO corresponding to the one connected to the LED</span>
+<span class="sd">&gt;&gt;&gt; led = board.get_digital_output(board.EXPANDER_1, 3)</span>
+<span class="sd">&gt;&gt;&gt; ...</span>
+<span class="sd">&gt;&gt;&gt; # switch the LED on by setting the IO in high state</span>
+<span class="sd">&gt;&gt;&gt; led.set()</span>
+<span class="sd">&gt;&gt;&gt; ...</span>
+<span class="sd">&gt;&gt;&gt; # switch the LED off by setting the IO in low state</span>
+<span class="sd">&gt;&gt;&gt; led.clear()</span>
+
+<span class="sd">Here is another example for reading an input, f.i. a switch connected on pin 11.</span>
+
+<span class="sd">&gt;&gt;&gt; board = IOPiBoard(i2c_bus)</span>
+<span class="sd">&gt;&gt;&gt; switch = board.get_digital_input(board.EXPANDER_1, 11, pullup_enabled=True</span>
+<span class="sd">&gt;&gt;&gt; ...</span>
+<span class="sd">&gt;&gt;&gt; # read the state of the switch</span>
+<span class="sd">&gt;&gt;&gt; if switch.is_set():</span>
+<span class="sd">&gt;&gt;&gt; ...</span>
+
+<span class="sd">Pretty simple, no ?</span>
+
+<span class="sd">&quot;&quot;&quot;</span>
+
+<span class="n">__author__</span> <span class="o">=</span> <span class="s">&#39;Eric PASCUAL for POBOT&#39;</span>
+<span class="n">__version__</span> <span class="o">=</span> <span class="s">&#39;2.0.0&#39;</span>
+<span class="n">__email__</span> <span class="o">=</span> <span class="s">&#39;eric@pobot.org&#39;</span>
+
+
+<div class="viewcode-block" id="IOPiBoard"><a class="viewcode-back" href="../../../iopi.html#pybot.abelec.iopi.IOPiBoard">[docs]</a><span class="k">class</span> <span class="nc">IOPiBoard</span><span class="p">(</span><span class="nb">object</span><span class="p">):</span>
+    <span class="sd">&quot;&quot;&quot; This class represents a whole IOPi expansion board.</span>
+
+<span class="sd">    Its main role is to act as a factory for individual IOs, so that the application</span>
+<span class="sd">    will not deal with bit masking and other boring chores.</span>
+
+
+<span class="sd">    It can be used directly to manipulate the registers of the 4 embedded I/O ports,</span>
+<span class="sd">    but usually it&#39;s simpler to use instances of the Port class for this. This is</span>
+<span class="sd">    fully equivalent, but user code is more readable this way.</span>
+
+<span class="sd">    This costs a small overhead since the Port methods delegates to Board ones, taking</span>
+<span class="sd">    care of passing them the additional parameters, but unless you have a critical</span>
+<span class="sd">    performances problem, it should do the trick most of the time.</span>
+<span class="sd">    &quot;&quot;&quot;</span>
+    <span class="n">EXPANDER_1</span> <span class="o">=</span> <span class="mi">0</span>
+    <span class="n">EXPANDER_2</span> <span class="o">=</span> <span class="mi">1</span>
+
+    <span class="n">EXP1_DEFAULT_ADDRESS</span> <span class="o">=</span> <span class="mh">0x20</span>
+    <span class="n">EXP2_DEFAULT_ADDRESS</span> <span class="o">=</span> <span class="mh">0x21</span>
+
+<div class="viewcode-block" id="IOPiBoard.__init__"><a class="viewcode-back" href="../../../iopi.html#pybot.abelec.iopi.IOPiBoard.__init__">[docs]</a>    <span class="k">def</span> <span class="nf">__init__</span><span class="p">(</span><span class="bp">self</span><span class="p">,</span> <span class="n">bus</span><span class="p">,</span> <span class="n">exp1_addr</span><span class="o">=</span><span class="n">EXP1_DEFAULT_ADDRESS</span><span class="p">,</span> <span class="n">exp2_addr</span><span class="o">=</span><span class="n">EXP2_DEFAULT_ADDRESS</span><span class="p">):</span>
+        <span class="sd">&quot;&quot;&quot; An instance of the I2C/SMBus class must be provided here. The calls used in the</span>
+<span class="sd">        classes of this module are based on the smbus.SMBus interface. Any implementation providing</span>
+<span class="sd">        the same API can thus be used, including fake ones for testing.</span>
+
+<span class="sd">        :param bus: the I2C/SMBus instance</span>
+<span class="sd">        :param int exp1_addr: I2C address of expander 1</span>
+<span class="sd">        :param int exp2_addr: I2C address of expander 1</span>
+<span class="sd">        &quot;&quot;&quot;</span>
+        <span class="bp">self</span><span class="o">.</span><span class="n">_bus</span> <span class="o">=</span> <span class="n">bus</span>
+        <span class="bp">self</span><span class="o">.</span><span class="n">expanders</span> <span class="o">=</span> <span class="p">(</span>
+            <span class="n">Expander</span><span class="p">(</span><span class="n">bus</span><span class="p">,</span> <span class="n">exp1_addr</span><span class="p">),</span>
+            <span class="n">Expander</span><span class="p">(</span><span class="n">bus</span><span class="p">,</span> <span class="n">exp2_addr</span><span class="p">),</span>
+        <span class="p">)</span>
+        <span class="bp">self</span><span class="o">.</span><span class="n">_ios</span> <span class="o">=</span> <span class="p">{}</span>
+</div>
+    <span class="k">def</span> <span class="nf">_get_io</span><span class="p">(</span><span class="bp">self</span><span class="p">,</span> <span class="n">expander_num</span><span class="p">,</span> <span class="n">board_io_num</span><span class="p">,</span> <span class="n">direction</span><span class="p">,</span> <span class="n">pullup_enabled</span><span class="o">=</span><span class="bp">False</span><span class="p">):</span>
+        <span class="k">if</span> <span class="n">expander_num</span> <span class="ow">not</span> <span class="ow">in</span> <span class="p">(</span><span class="bp">self</span><span class="o">.</span><span class="n">EXPANDER_1</span><span class="p">,</span> <span class="bp">self</span><span class="o">.</span><span class="n">EXPANDER_2</span><span class="p">):</span>
+            <span class="k">raise</span> <span class="ne">ValueError</span><span class="p">(</span><span class="s">&quot;invalid expander num (</span><span class="si">%d</span><span class="s">)&quot;</span> <span class="o">%</span> <span class="n">expander_num</span><span class="p">)</span>
+        <span class="k">if</span> <span class="ow">not</span> <span class="mi">1</span> <span class="o">&lt;=</span> <span class="n">board_io_num</span> <span class="o">&lt;=</span> <span class="mi">16</span><span class="p">:</span>
+            <span class="k">raise</span> <span class="ne">ValueError</span><span class="p">(</span><span class="s">&quot;invalid IO num (</span><span class="si">%d</span><span class="s">)&quot;</span> <span class="o">%</span> <span class="n">board_io_num</span><span class="p">)</span>
+
+        <span class="n">key</span> <span class="o">=</span> <span class="p">(</span><span class="n">expander_num</span> <span class="o">&lt;&lt;</span> <span class="mi">8</span><span class="p">)</span> <span class="o">+</span> <span class="n">board_io_num</span>
+        <span class="k">try</span><span class="p">:</span>
+            <span class="c"># try first to get the object from the cache</span>
+            <span class="n">io</span> <span class="o">=</span> <span class="bp">self</span><span class="o">.</span><span class="n">_ios</span><span class="p">[</span><span class="n">key</span><span class="p">]</span>
+        <span class="k">except</span> <span class="ne">KeyError</span><span class="p">:</span>
+            <span class="c"># not yet created =&gt; do it</span>
+            <span class="n">port_num</span><span class="p">,</span> <span class="n">io_num</span> <span class="o">=</span> <span class="bp">self</span><span class="o">.</span><span class="n">_board_io_num_to_port_io</span><span class="p">(</span><span class="n">board_io_num</span><span class="p">)</span>
+            <span class="n">port</span> <span class="o">=</span> <span class="bp">self</span><span class="o">.</span><span class="n">expanders</span><span class="p">[</span><span class="n">expander_num</span><span class="p">]</span><span class="o">.</span><span class="n">ports</span><span class="p">[</span><span class="n">port_num</span><span class="p">]</span>
+
+            <span class="c"># create the instance of the appropriate class, depending on the IO type</span>
+            <span class="k">if</span> <span class="n">direction</span> <span class="o">==</span> <span class="n">IO</span><span class="o">.</span><span class="n">DIR_INPUT</span><span class="p">:</span>
+                <span class="n">io</span> <span class="o">=</span> <span class="n">DigitalInput</span><span class="p">(</span><span class="n">port</span><span class="p">,</span> <span class="n">io_num</span><span class="p">,</span> <span class="n">pullup_enabled</span><span class="o">=</span><span class="n">pullup_enabled</span><span class="p">)</span>
+            <span class="k">else</span><span class="p">:</span>
+                <span class="n">io</span> <span class="o">=</span> <span class="n">DigitalOutput</span><span class="p">(</span><span class="n">port</span><span class="p">,</span> <span class="n">io_num</span><span class="p">)</span>
+            <span class="c"># cache the result</span>
+            <span class="bp">self</span><span class="o">.</span><span class="n">_ios</span><span class="p">[</span><span class="n">key</span><span class="p">]</span> <span class="o">=</span> <span class="n">io</span>
+        <span class="k">return</span> <span class="n">io</span>
+
+<div class="viewcode-block" id="IOPiBoard.get_digital_input"><a class="viewcode-back" href="../../../iopi.html#pybot.abelec.iopi.IOPiBoard.get_digital_input">[docs]</a>    <span class="k">def</span> <span class="nf">get_digital_input</span><span class="p">(</span><span class="bp">self</span><span class="p">,</span> <span class="n">expander_num</span><span class="p">,</span> <span class="n">board_io_num</span><span class="p">,</span> <span class="n">pullup_enabled</span><span class="o">=</span><span class="bp">False</span><span class="p">):</span>
+        <span class="sd">&quot;&quot;&quot; Factory method returning a DigitalInput instance for a given IO, and configures</span>
+<span class="sd">        it as requested.</span>
+<span class="sd">        :param int expander_num: IOPiBoard.EXPANDER_1 or IOPiBoard.EXPANDER_2</span>
+<span class="sd">        :param int board_io_num: the pin number of the IO on the expander header</span>
+<span class="sd">        :param pullup_enabled: should the internal pull-up be enabled or not</span>
+<span class="sd">        :return: the IO object</span>
+<span class="sd">        :rtype: DigitalInput</span>
+<span class="sd">        &quot;&quot;&quot;</span>
+        <span class="k">return</span> <span class="bp">self</span><span class="o">.</span><span class="n">_get_io</span><span class="p">(</span><span class="n">expander_num</span><span class="p">,</span> <span class="n">board_io_num</span><span class="p">,</span> <span class="n">direction</span><span class="o">=</span><span class="n">IO</span><span class="o">.</span><span class="n">DIR_INPUT</span><span class="p">,</span> <span class="n">pullup_enabled</span><span class="o">=</span><span class="n">pullup_enabled</span><span class="p">)</span>
+</div>
+<div class="viewcode-block" id="IOPiBoard.get_digital_output"><a class="viewcode-back" href="../../../iopi.html#pybot.abelec.iopi.IOPiBoard.get_digital_output">[docs]</a>    <span class="k">def</span> <span class="nf">get_digital_output</span><span class="p">(</span><span class="bp">self</span><span class="p">,</span> <span class="n">expander_num</span><span class="p">,</span> <span class="n">board_io_num</span><span class="p">):</span>
+        <span class="sd">&quot;&quot;&quot; Factory method returning a DigitalOutput instance for a given IO.</span>
+<span class="sd">        :param int expander_num: IOPiBoard.EXPANDER_1 or IOPiBoard.EXPANDER_2</span>
+<span class="sd">        :param int board_io_num: the pin number of the IO on the expander header</span>
+<span class="sd">        :return: the IO object</span>
+<span class="sd">        :rtype: DigitalOutput</span>
+<span class="sd">        &quot;&quot;&quot;</span>
+        <span class="k">return</span> <span class="bp">self</span><span class="o">.</span><span class="n">_get_io</span><span class="p">(</span><span class="n">expander_num</span><span class="p">,</span> <span class="n">board_io_num</span><span class="p">,</span> <span class="n">direction</span><span class="o">=</span><span class="n">IO</span><span class="o">.</span><span class="n">DIR_OUTPUT</span><span class="p">)</span>
+</div>
+<div class="viewcode-block" id="IOPiBoard.read"><a class="viewcode-back" href="../../../iopi.html#pybot.abelec.iopi.IOPiBoard.read">[docs]</a>    <span class="k">def</span> <span class="nf">read</span><span class="p">(</span><span class="bp">self</span><span class="p">):</span>
+        <span class="sd">&quot;&quot;&quot; Reads all ports of all expanders and returns their values as a single 32 bits integer.</span>
+
+<span class="sd">        The returned integer is built as follows:</span>
+<span class="sd">            MSB1 = expander_2.port_B</span>
+<span class="sd">            LSB1 = expander_2.port_A</span>
+<span class="sd">            MSB0 = expander_1.port_B</span>
+<span class="sd">            LSB0 = expander_1.port_A</span>
+
+<span class="sd">        :return: all board ports content</span>
+<span class="sd">        &quot;&quot;&quot;</span>
+        <span class="k">return</span> <span class="p">((</span><span class="bp">self</span><span class="o">.</span><span class="n">expanders</span><span class="p">[</span><span class="bp">self</span><span class="o">.</span><span class="n">EXPANDER_2</span><span class="p">]</span><span class="o">.</span><span class="n">read</span><span class="p">()</span> <span class="o">&lt;&lt;</span> <span class="mi">16</span><span class="p">)</span> <span class="o">|</span> <span class="bp">self</span><span class="o">.</span><span class="n">expanders</span><span class="p">[</span><span class="bp">self</span><span class="o">.</span><span class="n">EXPANDER_1</span><span class="p">]</span><span class="o">.</span><span class="n">read</span><span class="p">())</span> <span class="o">&amp;</span> <span class="mh">0xffffffff</span>
+</div>
+<div class="viewcode-block" id="IOPiBoard.reset"><a class="viewcode-back" href="../../../iopi.html#pybot.abelec.iopi.IOPiBoard.reset">[docs]</a>    <span class="k">def</span> <span class="nf">reset</span><span class="p">(</span><span class="bp">self</span><span class="p">):</span>
+        <span class="sd">&quot;&quot;&quot; Resets both expanders of the board</span>
+<span class="sd">        &quot;&quot;&quot;</span>
+        <span class="k">for</span> <span class="n">expander</span> <span class="ow">in</span> <span class="bp">self</span><span class="o">.</span><span class="n">expanders</span><span class="p">:</span>
+            <span class="n">expander</span><span class="o">.</span><span class="n">reset</span><span class="p">()</span>
+</div>
+    <span class="nd">@staticmethod</span>
+    <span class="k">def</span> <span class="nf">_board_io_num_to_port_io</span><span class="p">(</span><span class="n">board_io_num</span><span class="p">):</span>
+        <span class="n">board_io_num</span> <span class="o">-=</span> <span class="mi">1</span>
+        <span class="k">return</span> <span class="n">board_io_num</span> <span class="o">/</span> <span class="mi">8</span><span class="p">,</span> <span class="n">board_io_num</span> <span class="o">%</span> <span class="mi">8</span>
+
+</div>
+<div class="viewcode-block" id="Expander"><a class="viewcode-back" href="../../../iopi.html#pybot.abelec.iopi.Expander">[docs]</a><span class="k">class</span> <span class="nc">Expander</span><span class="p">(</span><span class="nb">object</span><span class="p">):</span>
+    <span class="sd">&quot;&quot;&quot; Models the MCP23017 expander chip, and handles its low level operations.</span>
+
+<span class="sd">    This class aggregates the two ports included in the chip.</span>
+<span class="sd">    &quot;&quot;&quot;</span>
+    <span class="n">PORT_A</span> <span class="o">=</span> <span class="mi">0</span>
+    <span class="n">PORT_B</span> <span class="o">=</span> <span class="mi">1</span>
+
+    <span class="c"># the register addressing scheme used here supposes that IOCON.BANK is set to 0 (default value)</span>
+    <span class="c"># and thus that port registers are sequential, so that address(xxxB) == address(xxxA + 1)</span>
+    <span class="n">IODIR</span> <span class="o">=</span> <span class="mh">0x00</span>
+    <span class="n">IPOL</span> <span class="o">=</span> <span class="mh">0x02</span>
+    <span class="n">GPINTEN</span> <span class="o">=</span> <span class="mh">0x04</span>
+    <span class="n">DEFVAL</span> <span class="o">=</span> <span class="mh">0x06</span>
+    <span class="n">INTCON</span> <span class="o">=</span> <span class="mh">0x08</span>
+    <span class="n">IOCON</span> <span class="o">=</span> <span class="mh">0x0A</span>
+    <span class="n">GPPU</span> <span class="o">=</span> <span class="mh">0x0C</span>
+    <span class="n">INTF</span> <span class="o">=</span> <span class="mh">0x0E</span>
+    <span class="n">INTCAP</span> <span class="o">=</span> <span class="mh">0x10</span>
+    <span class="n">GPIO</span> <span class="o">=</span> <span class="mh">0x12</span>
+    <span class="n">OLAT</span> <span class="o">=</span> <span class="mh">0x14</span>
+
+    <span class="c"># IOCON register flag masks</span>
+    <span class="n">IOCON_INTPOL</span> <span class="o">=</span> <span class="mh">0x02</span>
+    <span class="n">IOCON_ODR</span> <span class="o">=</span> <span class="mh">0x04</span>
+    <span class="n">IOCON_HAEN</span> <span class="o">=</span> <span class="mh">0x08</span>
+    <span class="n">IOCON_DISSLW</span> <span class="o">=</span> <span class="mh">0x10</span>
+    <span class="n">IOCON_SEQOP</span> <span class="o">=</span> <span class="mh">0x20</span>
+    <span class="n">IOCON_MIRROR</span> <span class="o">=</span> <span class="mh">0x40</span>
+    <span class="n">IOCON_BANK</span> <span class="o">=</span> <span class="mh">0x80</span>
+
+<div class="viewcode-block" id="Expander.__init__"><a class="viewcode-back" href="../../../iopi.html#pybot.abelec.iopi.Expander.__init__">[docs]</a>    <span class="k">def</span> <span class="nf">__init__</span><span class="p">(</span><span class="bp">self</span><span class="p">,</span> <span class="n">bus</span><span class="p">,</span> <span class="n">i2c_addr</span><span class="p">):</span>
+        <span class="sd">&quot;&quot;&quot;</span>
+<span class="sd">        :param bus: the I2C/SMBus instance</span>
+<span class="sd">        :param int i2c_addr: expander I2C address</span>
+<span class="sd">        &quot;&quot;&quot;</span>
+        <span class="bp">self</span><span class="o">.</span><span class="n">_bus</span> <span class="o">=</span> <span class="n">bus</span>
+        <span class="bp">self</span><span class="o">.</span><span class="n">_addr</span> <span class="o">=</span> <span class="n">i2c_addr</span>
+
+        <span class="bp">self</span><span class="o">.</span><span class="n">ports</span> <span class="o">=</span> <span class="p">(</span>
+            <span class="n">Port</span><span class="p">(</span><span class="bp">self</span><span class="p">,</span> <span class="bp">self</span><span class="o">.</span><span class="n">PORT_A</span><span class="p">),</span>
+            <span class="n">Port</span><span class="p">(</span><span class="bp">self</span><span class="p">,</span> <span class="bp">self</span><span class="o">.</span><span class="n">PORT_B</span><span class="p">)</span>
+        <span class="p">)</span>
+</div>
+<div class="viewcode-block" id="Expander.read_register"><a class="viewcode-back" href="../../../iopi.html#pybot.abelec.iopi.Expander.read_register">[docs]</a>    <span class="k">def</span> <span class="nf">read_register</span><span class="p">(</span><span class="bp">self</span><span class="p">,</span> <span class="n">addr</span><span class="p">):</span>
+        <span class="sd">&quot;&quot;&quot; Reads a chip register.</span>
+<span class="sd">        :param int addr: register address</span>
+<span class="sd">        :return: register content</span>
+<span class="sd">        :rtype: int</span>
+<span class="sd">        &quot;&quot;&quot;</span>
+        <span class="k">return</span> <span class="bp">self</span><span class="o">.</span><span class="n">_bus</span><span class="o">.</span><span class="n">read_byte_data</span><span class="p">(</span><span class="bp">self</span><span class="o">.</span><span class="n">_addr</span><span class="p">,</span> <span class="n">addr</span><span class="p">)</span> <span class="o">&amp;</span> <span class="mh">0xff</span>
+</div>
+<div class="viewcode-block" id="Expander.write_register"><a class="viewcode-back" href="../../../iopi.html#pybot.abelec.iopi.Expander.write_register">[docs]</a>    <span class="k">def</span> <span class="nf">write_register</span><span class="p">(</span><span class="bp">self</span><span class="p">,</span> <span class="n">reg</span><span class="p">,</span> <span class="n">data</span><span class="p">):</span>
+        <span class="sd">&quot;&quot;&quot; Writes a chip register.</span>
+
+<span class="sd">        Since the method takes care of clamping the passed value to a byte</span>
+<span class="sd">        extent, it also returns the clamped value for convenience.</span>
+
+<span class="sd">        :param int reg: register address</span>
+<span class="sd">        :param int data: register value</span>
+<span class="sd">        :return: the written data</span>
+<span class="sd">        :rtype: int</span>
+<span class="sd">        &quot;&quot;&quot;</span>
+        <span class="n">data</span> <span class="o">&amp;=</span> <span class="mh">0xff</span>
+        <span class="bp">self</span><span class="o">.</span><span class="n">_bus</span><span class="o">.</span><span class="n">write_byte_data</span><span class="p">(</span><span class="bp">self</span><span class="o">.</span><span class="n">_addr</span><span class="p">,</span> <span class="n">reg</span><span class="p">,</span> <span class="n">data</span><span class="p">)</span>
+        <span class="k">return</span> <span class="n">data</span>
+</div>
+<div class="viewcode-block" id="Expander.read"><a class="viewcode-back" href="../../../iopi.html#pybot.abelec.iopi.Expander.read">[docs]</a>    <span class="k">def</span> <span class="nf">read</span><span class="p">(</span><span class="bp">self</span><span class="p">):</span>
+        <span class="sd">&quot;&quot;&quot; Reads both expander ports and return their values as a 16 bits integer.</span>
+
+<span class="sd">        :return: 2 bytes integer with PORTB and PORTA values as respectively MSB and LSB</span>
+<span class="sd">        :rtype: int</span>
+<span class="sd">        &quot;&quot;&quot;</span>
+        <span class="k">return</span> <span class="p">((</span><span class="bp">self</span><span class="o">.</span><span class="n">ports</span><span class="p">[</span><span class="n">Expander</span><span class="o">.</span><span class="n">PORT_B</span><span class="p">]</span><span class="o">.</span><span class="n">read</span><span class="p">()</span> <span class="o">&lt;&lt;</span> <span class="mi">8</span><span class="p">)</span> <span class="o">|</span> <span class="bp">self</span><span class="o">.</span><span class="n">ports</span><span class="p">[</span><span class="n">Expander</span><span class="o">.</span><span class="n">PORT_A</span><span class="p">]</span><span class="o">.</span><span class="n">read</span><span class="p">())</span> <span class="o">&amp;</span> <span class="mh">0xffff</span>
+</div>
+<div class="viewcode-block" id="Expander.reset"><a class="viewcode-back" href="../../../iopi.html#pybot.abelec.iopi.Expander.reset">[docs]</a>    <span class="k">def</span> <span class="nf">reset</span><span class="p">(</span><span class="bp">self</span><span class="p">):</span>
+        <span class="sd">&quot;&quot;&quot; Resets both ports</span>
+<span class="sd">        &quot;&quot;&quot;</span>
+        <span class="k">for</span> <span class="n">port</span> <span class="ow">in</span> <span class="bp">self</span><span class="o">.</span><span class="n">ports</span><span class="p">:</span>
+            <span class="n">port</span><span class="o">.</span><span class="n">reset</span><span class="p">()</span>
+
+</div></div>
+<div class="viewcode-block" id="Port"><a class="viewcode-back" href="../../../iopi.html#pybot.abelec.iopi.Port">[docs]</a><span class="k">class</span> <span class="nc">Port</span><span class="p">(</span><span class="nb">object</span><span class="p">):</span>
+    <span class="sd">&quot;&quot;&quot; Model of an IO port of an expander.</span>
+
+<span class="sd">    Implements a caching mechanism for non volatile registers, so that modification</span>
+<span class="sd">    operations are optimized by removing the need for physically reading the registers</span>
+<span class="sd">    content.</span>
+<span class="sd">    &quot;&quot;&quot;</span>
+    <span class="c"># sets the cache in unset state</span>
+    <span class="n">_IODIR_cache</span> <span class="o">=</span> <span class="bp">None</span>
+    <span class="n">_GPPU_cache</span> <span class="o">=</span> <span class="bp">None</span>
+    <span class="n">_IPOL_cache</span> <span class="o">=</span> <span class="bp">None</span>
+    <span class="n">_IOCON_cache</span> <span class="o">=</span> <span class="bp">None</span>
+    <span class="n">_GPINTEN_cache</span> <span class="o">=</span> <span class="bp">None</span>
+    <span class="n">_INTCON_cache</span> <span class="o">=</span> <span class="bp">None</span>
+    <span class="n">_DEFVAL_cache</span> <span class="o">=</span> <span class="bp">None</span>
+
+<div class="viewcode-block" id="Port.__init__"><a class="viewcode-back" href="../../../iopi.html#pybot.abelec.iopi.Port.__init__">[docs]</a>    <span class="k">def</span> <span class="nf">__init__</span><span class="p">(</span><span class="bp">self</span><span class="p">,</span> <span class="n">expander</span><span class="p">,</span> <span class="n">port_num</span><span class="p">):</span>
+        <span class="sd">&quot;&quot;&quot;</span>
+<span class="sd">        :param Expander expander: Expander instance this port belongs to</span>
+<span class="sd">        :param int port_num: the port num (Expander.PORT_A or Expander.PORT_B).</span>
+<span class="sd">        &quot;&quot;&quot;</span>
+        <span class="k">if</span> <span class="n">port_num</span> <span class="ow">not</span> <span class="ow">in</span> <span class="p">(</span><span class="n">Expander</span><span class="o">.</span><span class="n">PORT_A</span><span class="p">,</span> <span class="n">Expander</span><span class="o">.</span><span class="n">PORT_B</span><span class="p">):</span>
+            <span class="k">raise</span> <span class="ne">ValueError</span><span class="p">(</span><span class="s">&quot;invalid port num (</span><span class="si">%d</span><span class="s">)&quot;</span> <span class="o">%</span> <span class="n">port_num</span><span class="p">)</span>
+        <span class="bp">self</span><span class="o">.</span><span class="n">_expander</span> <span class="o">=</span> <span class="n">expander</span>
+        <span class="bp">self</span><span class="o">.</span><span class="n">_port_num</span> <span class="o">=</span> <span class="n">port_num</span>
+        <span class="c"># initializes the registers cache</span>
+        <span class="bp">self</span><span class="o">.</span><span class="n">update_cache</span><span class="p">()</span>
+</div>
+<div class="viewcode-block" id="Port.update_cache"><a class="viewcode-back" href="../../../iopi.html#pybot.abelec.iopi.Port.update_cache">[docs]</a>    <span class="k">def</span> <span class="nf">update_cache</span><span class="p">(</span><span class="bp">self</span><span class="p">):</span>
+        <span class="sd">&quot;&quot;&quot; Updates the registers cache. &quot;&quot;&quot;</span>
+        <span class="bp">self</span><span class="o">.</span><span class="n">_IODIR_cache</span> <span class="o">=</span> <span class="bp">self</span><span class="o">.</span><span class="n">_expander</span><span class="o">.</span><span class="n">read_register</span><span class="p">(</span><span class="n">Expander</span><span class="o">.</span><span class="n">IODIR</span> <span class="o">+</span> <span class="bp">self</span><span class="o">.</span><span class="n">_port_num</span><span class="p">)</span>
+        <span class="bp">self</span><span class="o">.</span><span class="n">_GPPU_cache</span> <span class="o">=</span> <span class="bp">self</span><span class="o">.</span><span class="n">_expander</span><span class="o">.</span><span class="n">read_register</span><span class="p">(</span><span class="n">Expander</span><span class="o">.</span><span class="n">GPPU</span> <span class="o">+</span> <span class="bp">self</span><span class="o">.</span><span class="n">_port_num</span><span class="p">)</span>
+        <span class="bp">self</span><span class="o">.</span><span class="n">_IPOL_cache</span> <span class="o">=</span> <span class="bp">self</span><span class="o">.</span><span class="n">_expander</span><span class="o">.</span><span class="n">read_register</span><span class="p">(</span><span class="n">Expander</span><span class="o">.</span><span class="n">IPOL</span> <span class="o">+</span> <span class="bp">self</span><span class="o">.</span><span class="n">_port_num</span><span class="p">)</span>
+        <span class="bp">self</span><span class="o">.</span><span class="n">_IOCON_cache</span> <span class="o">=</span> <span class="bp">self</span><span class="o">.</span><span class="n">_expander</span><span class="o">.</span><span class="n">read_register</span><span class="p">(</span><span class="n">Expander</span><span class="o">.</span><span class="n">IOCON</span> <span class="o">+</span> <span class="bp">self</span><span class="o">.</span><span class="n">_port_num</span><span class="p">)</span>
+        <span class="bp">self</span><span class="o">.</span><span class="n">_GPINTEN_cache</span> <span class="o">=</span> <span class="bp">self</span><span class="o">.</span><span class="n">_expander</span><span class="o">.</span><span class="n">read_register</span><span class="p">(</span><span class="n">Expander</span><span class="o">.</span><span class="n">GPINTEN</span> <span class="o">+</span> <span class="bp">self</span><span class="o">.</span><span class="n">_port_num</span><span class="p">)</span>
+        <span class="bp">self</span><span class="o">.</span><span class="n">_DEFVAL_cache</span> <span class="o">=</span> <span class="bp">self</span><span class="o">.</span><span class="n">_expander</span><span class="o">.</span><span class="n">read_register</span><span class="p">(</span><span class="n">Expander</span><span class="o">.</span><span class="n">DEFVAL</span> <span class="o">+</span> <span class="bp">self</span><span class="o">.</span><span class="n">_port_num</span><span class="p">)</span>
+        <span class="bp">self</span><span class="o">.</span><span class="n">_INTCON_cache</span> <span class="o">=</span> <span class="bp">self</span><span class="o">.</span><span class="n">_expander</span><span class="o">.</span><span class="n">read_register</span><span class="p">(</span><span class="n">Expander</span><span class="o">.</span><span class="n">INTCON</span> <span class="o">+</span> <span class="bp">self</span><span class="o">.</span><span class="n">_port_num</span><span class="p">)</span>
+</div>
+    <span class="nd">@staticmethod</span>
+    <span class="k">def</span> <span class="nf">_change_bit</span><span class="p">(</span><span class="n">bit_num</span><span class="p">,</span> <span class="n">value</span><span class="p">,</span> <span class="n">byte</span><span class="p">):</span>
+        <span class="k">return</span> <span class="n">byte</span> <span class="o">|</span> <span class="p">(</span><span class="mi">1</span> <span class="o">&lt;&lt;</span> <span class="n">bit_num</span><span class="p">)</span> <span class="k">if</span> <span class="n">value</span> <span class="k">else</span> <span class="n">byte</span> <span class="o">&amp;</span> <span class="o">~</span> <span class="p">(</span><span class="mi">1</span> <span class="o">&lt;&lt;</span> <span class="n">bit_num</span><span class="p">)</span>
+
+    <span class="nd">@staticmethod</span>
+    <span class="k">def</span> <span class="nf">_change_bit_with_mask</span><span class="p">(</span><span class="n">bit_mask</span><span class="p">,</span> <span class="n">value</span><span class="p">,</span> <span class="n">byte</span><span class="p">):</span>
+        <span class="k">return</span> <span class="n">byte</span> <span class="o">|</span> <span class="n">bit_mask</span> <span class="k">if</span> <span class="n">value</span> <span class="k">else</span> <span class="n">byte</span> <span class="o">&amp;</span> <span class="o">~</span> <span class="n">bit_mask</span>
+
+    <span class="nd">@staticmethod</span>
+    <span class="k">def</span> <span class="nf">_test_bit</span><span class="p">(</span><span class="n">bit_num</span><span class="p">,</span> <span class="n">byte</span><span class="p">):</span>
+        <span class="k">return</span> <span class="p">(</span><span class="n">byte</span> <span class="o">&amp;</span> <span class="p">(</span><span class="mi">1</span> <span class="o">&lt;&lt;</span> <span class="n">bit_num</span><span class="p">))</span> <span class="o">!=</span> <span class="mi">0</span>
+
+    <span class="nd">@staticmethod</span>
+    <span class="k">def</span> <span class="nf">_test_bit_with_mask</span><span class="p">(</span><span class="n">bit_mask</span><span class="p">,</span> <span class="n">byte</span><span class="p">):</span>
+        <span class="k">return</span> <span class="p">(</span><span class="n">byte</span> <span class="o">&amp;</span> <span class="n">bit_mask</span><span class="p">)</span> <span class="o">!=</span> <span class="mi">0</span>
+
+    <span class="nd">@staticmethod</span>
+    <span class="k">def</span> <span class="nf">_check_io_num</span><span class="p">(</span><span class="n">io_num</span><span class="p">):</span>
+        <span class="k">if</span> <span class="ow">not</span> <span class="mi">0</span> <span class="o">&lt;=</span> <span class="n">io_num</span> <span class="o">&lt;</span> <span class="mi">8</span><span class="p">:</span>
+            <span class="k">raise</span> <span class="ne">ValueError</span><span class="p">(</span><span class="s">&#39;invalid IO num (</span><span class="si">%d</span><span class="s">)&#39;</span> <span class="o">%</span> <span class="n">io_num</span><span class="p">)</span>
+
+    <span class="nd">@property</span>
+    <span class="k">def</span> <span class="nf">io_directions</span><span class="p">(</span><span class="bp">self</span><span class="p">):</span>
+        <span class="sd">&quot;&quot;&quot; Returns the current settings of the port IO directions. &quot;&quot;&quot;</span>
+        <span class="k">return</span> <span class="bp">self</span><span class="o">.</span><span class="n">_IODIR_cache</span>
+
+    <span class="nd">@io_directions.setter</span>
+    <span class="k">def</span> <span class="nf">io_directions</span><span class="p">(</span><span class="bp">self</span><span class="p">,</span> <span class="n">dirs</span><span class="p">):</span>
+        <span class="sd">&quot;&quot;&quot; Sets the port IO directions configuration.</span>
+<span class="sd">        :param int dirs: a byte containing the IO direction flags for all the IO of the port</span>
+<span class="sd">        &quot;&quot;&quot;</span>
+        <span class="bp">self</span><span class="o">.</span><span class="n">_IODIR_cache</span> <span class="o">=</span> <span class="bp">self</span><span class="o">.</span><span class="n">_expander</span><span class="o">.</span><span class="n">write_register</span><span class="p">(</span><span class="n">Expander</span><span class="o">.</span><span class="n">IODIR</span> <span class="o">+</span> <span class="bp">self</span><span class="o">.</span><span class="n">_port_num</span><span class="p">,</span> <span class="n">dirs</span><span class="p">)</span>
+
+<div class="viewcode-block" id="Port.set_io_direction"><a class="viewcode-back" href="../../../iopi.html#pybot.abelec.iopi.Port.set_io_direction">[docs]</a>    <span class="k">def</span> <span class="nf">set_io_direction</span><span class="p">(</span><span class="bp">self</span><span class="p">,</span> <span class="n">io_num</span><span class="p">,</span> <span class="n">direction</span><span class="p">):</span>
+        <span class="sd">&quot;&quot;&quot; Sets the direction of a single IO</span>
+<span class="sd">        :param int io_num: the IO num ([0-7])</span>
+<span class="sd">        :param int direction: IO.DIR_INPUT or IO.DIR_INPUT</span>
+<span class="sd">        :raise: ValueError if out of range io_num</span>
+<span class="sd">        &quot;&quot;&quot;</span>
+        <span class="bp">self</span><span class="o">.</span><span class="n">_check_io_num</span><span class="p">(</span><span class="n">io_num</span><span class="p">)</span>
+        <span class="bp">self</span><span class="o">.</span><span class="n">io_directions</span> <span class="o">=</span> <span class="bp">self</span><span class="o">.</span><span class="n">_change_bit</span><span class="p">(</span><span class="n">io_num</span><span class="p">,</span> <span class="n">direction</span> <span class="o">==</span> <span class="n">IO</span><span class="o">.</span><span class="n">DIR_INPUT</span><span class="p">,</span> <span class="bp">self</span><span class="o">.</span><span class="n">_GPPU_cache</span><span class="p">)</span>
+</div>
+    <span class="nd">@property</span>
+    <span class="k">def</span> <span class="nf">pullups_enabled</span><span class="p">(</span><span class="bp">self</span><span class="p">):</span>
+        <span class="sd">&quot;&quot;&quot; Returns the current settings of the port inputs pullups. &quot;&quot;&quot;</span>
+        <span class="k">return</span> <span class="bp">self</span><span class="o">.</span><span class="n">_GPPU_cache</span>
+
+    <span class="nd">@pullups_enabled.setter</span>
+    <span class="k">def</span> <span class="nf">pullups_enabled</span><span class="p">(</span><span class="bp">self</span><span class="p">,</span> <span class="n">settings</span><span class="p">):</span>
+        <span class="sd">&quot;&quot;&quot; Configures the port inputs pullups. &quot;&quot;&quot;</span>
+        <span class="bp">self</span><span class="o">.</span><span class="n">_GPPU_cache</span> <span class="o">=</span> <span class="bp">self</span><span class="o">.</span><span class="n">_expander</span><span class="o">.</span><span class="n">write_register</span><span class="p">(</span><span class="n">Expander</span><span class="o">.</span><span class="n">GPPU</span> <span class="o">+</span> <span class="bp">self</span><span class="o">.</span><span class="n">_port_num</span><span class="p">,</span> <span class="n">settings</span><span class="p">)</span>
+
+<div class="viewcode-block" id="Port.enable_pullup"><a class="viewcode-back" href="../../../iopi.html#pybot.abelec.iopi.Port.enable_pullup">[docs]</a>    <span class="k">def</span> <span class="nf">enable_pullup</span><span class="p">(</span><span class="bp">self</span><span class="p">,</span> <span class="n">io_num</span><span class="p">,</span> <span class="n">enabled</span><span class="p">):</span>
+        <span class="sd">&quot;&quot;&quot; Configures a single input pullup.</span>
+<span class="sd">        :param int io_num: the IO num ([0-7])</span>
+<span class="sd">        :param bool enabled: is the pullup enabled ?</span>
+<span class="sd">        :raise: ValueError if out of range io_num</span>
+<span class="sd">        &quot;&quot;&quot;</span>
+        <span class="bp">self</span><span class="o">.</span><span class="n">_check_io_num</span><span class="p">(</span><span class="n">io_num</span><span class="p">)</span>
+        <span class="bp">self</span><span class="o">.</span><span class="n">pullups_enabled</span> <span class="o">=</span> <span class="bp">self</span><span class="o">.</span><span class="n">_change_bit</span><span class="p">(</span><span class="n">io_num</span><span class="p">,</span> <span class="n">enabled</span><span class="p">,</span> <span class="bp">self</span><span class="o">.</span><span class="n">_GPPU_cache</span><span class="p">)</span>
+</div>
+    <span class="nd">@property</span>
+    <span class="k">def</span> <span class="nf">inputs_inverted</span><span class="p">(</span><span class="bp">self</span><span class="p">):</span>
+        <span class="sd">&quot;&quot;&quot; Returns the current settings of the port inputs polarity inversion. &quot;&quot;&quot;</span>
+        <span class="k">return</span> <span class="bp">self</span><span class="o">.</span><span class="n">_IPOL_cache</span>
+
+    <span class="nd">@inputs_inverted.setter</span>
+    <span class="k">def</span> <span class="nf">inputs_inverted</span><span class="p">(</span><span class="bp">self</span><span class="p">,</span> <span class="n">settings</span><span class="p">):</span>
+        <span class="sd">&quot;&quot;&quot; Configures the port inputs polarity inversion. &quot;&quot;&quot;</span>
+        <span class="bp">self</span><span class="o">.</span><span class="n">_IPOL_cache</span> <span class="o">=</span> <span class="bp">self</span><span class="o">.</span><span class="n">_expander</span><span class="o">.</span><span class="n">write_register</span><span class="p">(</span><span class="n">Expander</span><span class="o">.</span><span class="n">IPOL</span> <span class="o">+</span> <span class="bp">self</span><span class="o">.</span><span class="n">_port_num</span><span class="p">,</span> <span class="n">settings</span><span class="p">)</span>
+
+<div class="viewcode-block" id="Port.invert_input"><a class="viewcode-back" href="../../../iopi.html#pybot.abelec.iopi.Port.invert_input">[docs]</a>    <span class="k">def</span> <span class="nf">invert_input</span><span class="p">(</span><span class="bp">self</span><span class="p">,</span> <span class="n">io_num</span><span class="p">,</span> <span class="n">inverted</span><span class="p">):</span>
+        <span class="sd">&quot;&quot;&quot; Configures the inversion of a given input.</span>
+<span class="sd">        :param int io_num: the IO num ([0-7])</span>
+<span class="sd">        :param bool inverted: is the input inverted ?</span>
+<span class="sd">        :raise: ValueError if out of range io_num</span>
+<span class="sd">        &quot;&quot;&quot;</span>
+        <span class="bp">self</span><span class="o">.</span><span class="n">_check_io_num</span><span class="p">(</span><span class="n">io_num</span><span class="p">)</span>
+        <span class="bp">self</span><span class="o">.</span><span class="n">interrupts_enabled</span> <span class="o">=</span> <span class="bp">self</span><span class="o">.</span><span class="n">_change_bit</span><span class="p">(</span><span class="n">io_num</span><span class="p">,</span> <span class="n">inverted</span><span class="p">,</span> <span class="bp">self</span><span class="o">.</span><span class="n">_IPOL_cache</span><span class="p">)</span>
+</div>
+    <span class="nd">@property</span>
+    <span class="k">def</span> <span class="nf">interrupts_enabled</span><span class="p">(</span><span class="bp">self</span><span class="p">):</span>
+        <span class="sd">&quot;&quot;&quot; Returns the current settings of the port inputs interrupts enabling. &quot;&quot;&quot;</span>
+        <span class="k">return</span> <span class="bp">self</span><span class="o">.</span><span class="n">_GPINTEN_cache</span>
+
+    <span class="nd">@interrupts_enabled.setter</span>
+    <span class="k">def</span> <span class="nf">interrupts_enabled</span><span class="p">(</span><span class="bp">self</span><span class="p">,</span> <span class="n">settings</span><span class="p">):</span>
+        <span class="sd">&quot;&quot;&quot; Configures the port inputs interrupts enabling. &quot;&quot;&quot;</span>
+        <span class="bp">self</span><span class="o">.</span><span class="n">_GPINTEN_cache</span> <span class="o">=</span> <span class="bp">self</span><span class="o">.</span><span class="n">_expander</span><span class="o">.</span><span class="n">write_register</span><span class="p">(</span><span class="n">Expander</span><span class="o">.</span><span class="n">GPINTEN</span> <span class="o">+</span> <span class="bp">self</span><span class="o">.</span><span class="n">_port_num</span><span class="p">,</span> <span class="n">settings</span><span class="p">)</span>
+
+<div class="viewcode-block" id="Port.enable_interrupt"><a class="viewcode-back" href="../../../iopi.html#pybot.abelec.iopi.Port.enable_interrupt">[docs]</a>    <span class="k">def</span> <span class="nf">enable_interrupt</span><span class="p">(</span><span class="bp">self</span><span class="p">,</span> <span class="n">io_num</span><span class="p">,</span> <span class="n">enabled</span><span class="p">):</span>
+        <span class="sd">&quot;&quot;&quot; Enables interrupts for a given input.</span>
+<span class="sd">        :param int io_num: the IO num ([0-7])</span>
+<span class="sd">        :param bool enabled: is interrupt enabled ?</span>
+<span class="sd">        :raise: ValueError if out of range io_num</span>
+<span class="sd">        &quot;&quot;&quot;</span>
+        <span class="bp">self</span><span class="o">.</span><span class="n">_check_io_num</span><span class="p">(</span><span class="n">io_num</span><span class="p">)</span>
+        <span class="bp">self</span><span class="o">.</span><span class="n">interrupts_enabled</span> <span class="o">=</span> <span class="bp">self</span><span class="o">.</span><span class="n">_change_bit</span><span class="p">(</span><span class="n">io_num</span><span class="p">,</span> <span class="n">enabled</span><span class="p">,</span> <span class="bp">self</span><span class="o">.</span><span class="n">_GPINTEN_cache</span><span class="p">)</span>
+</div>
+    <span class="nd">@property</span>
+    <span class="k">def</span> <span class="nf">interrupt_sources</span><span class="p">(</span><span class="bp">self</span><span class="p">):</span>
+        <span class="sd">&quot;&quot;&quot; Returns the current settings of the port interrupt compare sources. &quot;&quot;&quot;</span>
+        <span class="k">return</span> <span class="bp">self</span><span class="o">.</span><span class="n">_INTCON_cache</span>
+
+    <span class="nd">@interrupt_sources.setter</span>
+    <span class="k">def</span> <span class="nf">interrupt_sources</span><span class="p">(</span><span class="bp">self</span><span class="p">,</span> <span class="n">settings</span><span class="p">):</span>
+        <span class="sd">&quot;&quot;&quot; Configures the port interrupt compare sources. &quot;&quot;&quot;</span>
+        <span class="bp">self</span><span class="o">.</span><span class="n">_INTCON_cache</span> <span class="o">=</span> <span class="bp">self</span><span class="o">.</span><span class="n">_expander</span><span class="o">.</span><span class="n">write_register</span><span class="p">(</span><span class="n">Expander</span><span class="o">.</span><span class="n">INTCON</span> <span class="o">+</span> <span class="bp">self</span><span class="o">.</span><span class="n">_port_num</span><span class="p">,</span> <span class="n">settings</span><span class="p">)</span>
+
+<div class="viewcode-block" id="Port.set_interrupt_source"><a class="viewcode-back" href="../../../iopi.html#pybot.abelec.iopi.Port.set_interrupt_source">[docs]</a>    <span class="k">def</span> <span class="nf">set_interrupt_source</span><span class="p">(</span><span class="bp">self</span><span class="p">,</span> <span class="n">io_num</span><span class="p">,</span> <span class="n">source</span><span class="p">):</span>
+        <span class="sd">&quot;&quot;&quot; Sets the compare source for input interrupts for a given input.</span>
+<span class="sd">        :param int io_num: the IO num ([0-7])</span>
+<span class="sd">        :param int source: IO.INT_COMPARE or IO.INT_CHANGE</span>
+<span class="sd">        :raise: ValueError if out of range io_num</span>
+<span class="sd">        &quot;&quot;&quot;</span>
+        <span class="bp">self</span><span class="o">.</span><span class="n">_check_io_num</span><span class="p">(</span><span class="n">io_num</span><span class="p">)</span>
+        <span class="bp">self</span><span class="o">.</span><span class="n">interrupt_sources</span> <span class="o">=</span> <span class="bp">self</span><span class="o">.</span><span class="n">_change_bit</span><span class="p">(</span><span class="n">io_num</span><span class="p">,</span> <span class="n">source</span><span class="p">,</span> <span class="bp">self</span><span class="o">.</span><span class="n">_INTCON_cache</span><span class="p">)</span>
+</div>
+    <span class="nd">@property</span>
+    <span class="k">def</span> <span class="nf">default_values</span><span class="p">(</span><span class="bp">self</span><span class="p">):</span>
+        <span class="sd">&quot;&quot;&quot; Returns the current settings of the port interrupt default values. &quot;&quot;&quot;</span>
+        <span class="k">return</span> <span class="bp">self</span><span class="o">.</span><span class="n">_DEFVAL_cache</span>
+
+    <span class="nd">@default_values.setter</span>
+    <span class="k">def</span> <span class="nf">default_values</span><span class="p">(</span><span class="bp">self</span><span class="p">,</span> <span class="n">settings</span><span class="p">):</span>
+        <span class="sd">&quot;&quot;&quot; Configures the port interrupt default values. &quot;&quot;&quot;</span>
+        <span class="bp">self</span><span class="o">.</span><span class="n">_DEFVAL_cache</span> <span class="o">=</span> <span class="bp">self</span><span class="o">.</span><span class="n">_expander</span><span class="o">.</span><span class="n">write_register</span><span class="p">(</span><span class="n">Expander</span><span class="o">.</span><span class="n">DEFVAL</span> <span class="o">+</span> <span class="bp">self</span><span class="o">.</span><span class="n">_port_num</span><span class="p">,</span> <span class="n">settings</span><span class="p">)</span>
+
+<div class="viewcode-block" id="Port.set_default_value"><a class="viewcode-back" href="../../../iopi.html#pybot.abelec.iopi.Port.set_default_value">[docs]</a>    <span class="k">def</span> <span class="nf">set_default_value</span><span class="p">(</span><span class="bp">self</span><span class="p">,</span> <span class="n">io_num</span><span class="p">,</span> <span class="n">value</span><span class="p">):</span>
+        <span class="sd">&quot;&quot;&quot; Sets the input change default value for a given input.</span>
+<span class="sd">        :param int io_num: the IO num ([0-7])</span>
+<span class="sd">        :param int value: default value (0 or 1)</span>
+<span class="sd">        :raise: ValueError if out of range io_num</span>
+<span class="sd">        &quot;&quot;&quot;</span>
+        <span class="bp">self</span><span class="o">.</span><span class="n">_check_io_num</span><span class="p">(</span><span class="n">io_num</span><span class="p">)</span>
+        <span class="bp">self</span><span class="o">.</span><span class="n">default_values</span> <span class="o">=</span> <span class="bp">self</span><span class="o">.</span><span class="n">_change_bit</span><span class="p">(</span><span class="n">io_num</span><span class="p">,</span> <span class="n">value</span><span class="p">,</span> <span class="bp">self</span><span class="o">.</span><span class="n">_DEFVAL_cache</span><span class="p">)</span>
+</div>
+    <span class="nd">@property</span>
+    <span class="k">def</span> <span class="nf">configuration</span><span class="p">(</span><span class="bp">self</span><span class="p">):</span>
+        <span class="k">return</span> <span class="bp">self</span><span class="o">.</span><span class="n">_IOCON_cache</span>
+
+    <span class="nd">@configuration.setter</span>
+    <span class="k">def</span> <span class="nf">configuration</span><span class="p">(</span><span class="bp">self</span><span class="p">,</span> <span class="n">value</span><span class="p">):</span>
+        <span class="bp">self</span><span class="o">.</span><span class="n">_IOCON_cache</span> <span class="o">=</span> <span class="bp">self</span><span class="o">.</span><span class="n">_expander</span><span class="o">.</span><span class="n">write_register</span><span class="p">(</span><span class="bp">self</span><span class="o">.</span><span class="n">_IOCON_cache</span> <span class="o">+</span> <span class="bp">self</span><span class="o">.</span><span class="n">_port_num</span><span class="p">,</span> <span class="n">value</span><span class="p">)</span>
+
+<div class="viewcode-block" id="Port.write"><a class="viewcode-back" href="../../../iopi.html#pybot.abelec.iopi.Port.write">[docs]</a>    <span class="k">def</span> <span class="nf">write</span><span class="p">(</span><span class="bp">self</span><span class="p">,</span> <span class="n">value</span><span class="p">):</span>
+        <span class="sd">&quot;&quot;&quot; Write a value to the port</span>
+<span class="sd">        :param int value: the value to be written</span>
+<span class="sd">        :return: the clamped value (see :py:meth:`Expander.write_register`)</span>
+<span class="sd">        :rtype: int</span>
+<span class="sd">        &quot;&quot;&quot;</span>
+        <span class="k">return</span> <span class="bp">self</span><span class="o">.</span><span class="n">_expander</span><span class="o">.</span><span class="n">write_register</span><span class="p">(</span><span class="n">Expander</span><span class="o">.</span><span class="n">GPIO</span> <span class="o">+</span> <span class="bp">self</span><span class="o">.</span><span class="n">_port_num</span><span class="p">,</span> <span class="n">value</span><span class="p">)</span>
+</div>
+<div class="viewcode-block" id="Port.read"><a class="viewcode-back" href="../../../iopi.html#pybot.abelec.iopi.Port.read">[docs]</a>    <span class="k">def</span> <span class="nf">read</span><span class="p">(</span><span class="bp">self</span><span class="p">):</span>
+        <span class="sd">&quot;&quot;&quot; Reads the port.</span>
+<span class="sd">        :return: the port content</span>
+<span class="sd">        &quot;&quot;&quot;</span>
+        <span class="k">return</span> <span class="bp">self</span><span class="o">.</span><span class="n">_expander</span><span class="o">.</span><span class="n">read_register</span><span class="p">(</span><span class="n">Expander</span><span class="o">.</span><span class="n">GPIO</span> <span class="o">+</span> <span class="bp">self</span><span class="o">.</span><span class="n">_port_num</span><span class="p">)</span> <span class="o">&amp;</span> <span class="mh">0xff</span>
+</div>
+<div class="viewcode-block" id="Port.reset"><a class="viewcode-back" href="../../../iopi.html#pybot.abelec.iopi.Port.reset">[docs]</a>    <span class="k">def</span> <span class="nf">reset</span><span class="p">(</span><span class="bp">self</span><span class="p">):</span>
+        <span class="sd">&quot;&quot;&quot; Puts the port in default POR state</span>
+<span class="sd">        &quot;&quot;&quot;</span>
+        <span class="bp">self</span><span class="o">.</span><span class="n">interrupts_enabled</span> <span class="o">=</span> <span class="mi">0</span>
+        <span class="bp">self</span><span class="o">.</span><span class="n">pullups_enabled</span> <span class="o">=</span> <span class="mi">0</span>
+        <span class="bp">self</span><span class="o">.</span><span class="n">io_directions</span> <span class="o">=</span> <span class="mh">0xff</span>
+</div>
+<div class="viewcode-block" id="Port.dump"><a class="viewcode-back" href="../../../iopi.html#pybot.abelec.iopi.Port.dump">[docs]</a>    <span class="k">def</span> <span class="nf">dump</span><span class="p">(</span><span class="bp">self</span><span class="p">):</span>
+        <span class="sd">&quot;&quot;&quot; Internal method for debugging.&quot;&quot;&quot;</span>
+        <span class="k">for</span> <span class="n">k</span><span class="p">,</span> <span class="n">v</span> <span class="ow">in</span> <span class="bp">self</span><span class="o">.</span><span class="n">__dict__</span><span class="o">.</span><span class="n">iteritems</span><span class="p">():</span>
+            <span class="k">print</span><span class="p">(</span><span class="s">&quot;</span><span class="si">%20s</span><span class="s"> : </span><span class="si">%s</span><span class="s">&quot;</span> <span class="o">%</span> <span class="p">(</span><span class="n">k</span><span class="p">,</span> <span class="n">v</span><span class="p">))</span>
+
+</div></div>
+<div class="viewcode-block" id="IO"><a class="viewcode-back" href="../../../iopi.html#pybot.abelec.iopi.IO">[docs]</a><span class="k">class</span> <span class="nc">IO</span><span class="p">(</span><span class="nb">object</span><span class="p">):</span>
+    <span class="sd">&quot;&quot;&quot; Root class for modeling a single IO or a port.</span>
+<span class="sd">    &quot;&quot;&quot;</span>
+    <span class="n">DIR_OUTPUT</span> <span class="o">=</span> <span class="mi">0</span>
+    <span class="n">DIR_INPUT</span> <span class="o">=</span> <span class="mi">1</span>
+    <span class="n">INT_CHANGE</span> <span class="o">=</span> <span class="mi">0</span>
+    <span class="n">INT_COMPARE</span> <span class="o">=</span> <span class="mi">1</span>
+
+<div class="viewcode-block" id="IO.__init__"><a class="viewcode-back" href="../../../iopi.html#pybot.abelec.iopi.IO.__init__">[docs]</a>    <span class="k">def</span> <span class="nf">__init__</span><span class="p">(</span><span class="bp">self</span><span class="p">,</span> <span class="n">port</span><span class="p">,</span> <span class="n">num</span><span class="p">,</span> <span class="n">is_input</span><span class="p">):</span>
+        <span class="sd">&quot;&quot;&quot;</span>
+<span class="sd">        :param Port port: the port the IO is attached to</span>
+<span class="sd">        :param int num: IO num ([0-7])</span>
+<span class="sd">        :param bool is_input: is an input or not ?</span>
+<span class="sd">        &quot;&quot;&quot;</span>
+        <span class="k">if</span> <span class="ow">not</span> <span class="mi">0</span> <span class="o">&lt;=</span> <span class="n">num</span> <span class="o">&lt;</span> <span class="mi">8</span><span class="p">:</span>
+            <span class="k">raise</span> <span class="ne">ValueError</span><span class="p">(</span><span class="s">&#39;invalid IO num (</span><span class="si">%d</span><span class="s">)&#39;</span> <span class="o">%</span> <span class="n">num</span><span class="p">)</span>
+
+        <span class="bp">self</span><span class="o">.</span><span class="n">_port</span> <span class="o">=</span> <span class="n">port</span>
+        <span class="n">port</span><span class="o">.</span><span class="n">set_io_direction</span><span class="p">(</span><span class="n">num</span><span class="p">,</span> <span class="n">IO</span><span class="o">.</span><span class="n">DIR_INPUT</span> <span class="k">if</span> <span class="n">is_input</span> <span class="k">else</span> <span class="n">IO</span><span class="o">.</span><span class="n">DIR_OUTPUT</span><span class="p">)</span>
+        <span class="bp">self</span><span class="o">.</span><span class="n">_mask</span> <span class="o">=</span> <span class="mi">1</span> <span class="o">&lt;&lt;</span> <span class="n">num</span>
+</div>
+    <span class="nd">@property</span>
+    <span class="k">def</span> <span class="nf">port</span><span class="p">(</span><span class="bp">self</span><span class="p">):</span>
+        <span class="sd">&quot;&quot;&quot; The port this IO belongs to.</span>
+<span class="sd">        &quot;&quot;&quot;</span>
+        <span class="k">return</span> <span class="bp">self</span><span class="o">.</span><span class="n">_port</span>
+
+    <span class="nd">@property</span>
+    <span class="k">def</span> <span class="nf">mask</span><span class="p">(</span><span class="bp">self</span><span class="p">):</span>
+        <span class="sd">&quot;&quot;&quot; The bit mask of this IO.</span>
+
+<span class="sd">        It can be useful for manipulating IOs with port single read/write</span>
+<span class="sd">        for optimizing access.</span>
+<span class="sd">        &quot;&quot;&quot;</span>
+        <span class="k">return</span> <span class="bp">self</span><span class="o">.</span><span class="n">_mask</span>
+
+</div>
+<span class="k">class</span> <span class="nc">_ReadableIOMixin</span><span class="p">(</span><span class="nb">object</span><span class="p">):</span>
+    <span class="sd">&quot;&quot;&quot; A mixin gathering read operations applicable to IOs.</span>
+
+<span class="sd">     It can be used equally for inputs and outputs, and will read the latches</span>
+<span class="sd">     for the later.</span>
+<span class="sd">    &quot;&quot;&quot;</span>
+    <span class="n">_port</span> <span class="o">=</span> <span class="bp">None</span>
+    <span class="n">_mask</span> <span class="o">=</span> <span class="bp">None</span>
+
+    <span class="k">def</span> <span class="nf">read</span><span class="p">(</span><span class="bp">self</span><span class="p">):</span>
+        <span class="sd">&quot;&quot;&quot; Returns the bit value (0 or 1) of the IO. &quot;&quot;&quot;</span>
+        <span class="k">return</span> <span class="mi">1</span> <span class="k">if</span> <span class="bp">self</span><span class="o">.</span><span class="n">_port</span><span class="o">.</span><span class="n">read</span><span class="p">()</span> <span class="o">&amp;</span> <span class="bp">self</span><span class="o">.</span><span class="n">_mask</span> <span class="k">else</span> <span class="mi">0</span>
+
+    <span class="k">def</span> <span class="nf">is_set</span><span class="p">(</span><span class="bp">self</span><span class="p">):</span>
+        <span class="sd">&quot;&quot;&quot; Returns True if the IO is high. &quot;&quot;&quot;</span>
+        <span class="k">return</span> <span class="bp">self</span><span class="o">.</span><span class="n">read</span><span class="p">()</span>
+
+    <span class="k">def</span> <span class="nf">is_clear</span><span class="p">(</span><span class="bp">self</span><span class="p">):</span>
+        <span class="sd">&quot;&quot;&quot; Returns True if the IO is low. &quot;&quot;&quot;</span>
+        <span class="k">return</span> <span class="ow">not</span> <span class="bp">self</span><span class="o">.</span><span class="n">read</span><span class="p">()</span>
+
+
+<div class="viewcode-block" id="DigitalInput"><a class="viewcode-back" href="../../../iopi.html#pybot.abelec.iopi.DigitalInput">[docs]</a><span class="k">class</span> <span class="nc">DigitalInput</span><span class="p">(</span><span class="n">IO</span><span class="p">,</span> <span class="n">_ReadableIOMixin</span><span class="p">):</span>
+    <span class="sd">&quot;&quot;&quot; A specialized IO modeling an input.&quot;&quot;&quot;</span>
+<div class="viewcode-block" id="DigitalInput.__init__"><a class="viewcode-back" href="../../../iopi.html#pybot.abelec.iopi.DigitalInput.__init__">[docs]</a>    <span class="k">def</span> <span class="nf">__init__</span><span class="p">(</span><span class="bp">self</span><span class="p">,</span> <span class="n">port</span><span class="p">,</span> <span class="n">num</span><span class="p">,</span> <span class="n">pullup_enabled</span><span class="o">=</span><span class="bp">False</span><span class="p">):</span>
+        <span class="sd">&quot;&quot;&quot;</span>
+<span class="sd">        :param Port port: the port this IO belongs to</span>
+<span class="sd">        :param int num: the IO number ([0-7])</span>
+<span class="sd">        :param bool pullup_enabled: should the pullup be enabled ?</span>
+<span class="sd">        &quot;&quot;&quot;</span>
+        <span class="nb">super</span><span class="p">(</span><span class="n">DigitalInput</span><span class="p">,</span> <span class="bp">self</span><span class="p">)</span><span class="o">.</span><span class="n">__init__</span><span class="p">(</span><span class="n">port</span><span class="p">,</span> <span class="n">num</span><span class="p">,</span> <span class="n">is_input</span><span class="o">=</span><span class="bp">True</span><span class="p">)</span>
+        <span class="bp">self</span><span class="o">.</span><span class="n">_port</span><span class="o">.</span><span class="n">enable_pullup</span><span class="p">(</span><span class="n">num</span><span class="p">,</span> <span class="n">pullup_enabled</span><span class="p">)</span>
+
+</div></div>
+<div class="viewcode-block" id="DigitalOutput"><a class="viewcode-back" href="../../../iopi.html#pybot.abelec.iopi.DigitalOutput">[docs]</a><span class="k">class</span> <span class="nc">DigitalOutput</span><span class="p">(</span><span class="n">IO</span><span class="p">,</span> <span class="n">_ReadableIOMixin</span><span class="p">):</span>
+    <span class="sd">&quot;&quot;&quot; A specialized IO modeling an output.&quot;&quot;&quot;</span>
+<div class="viewcode-block" id="DigitalOutput.__init__"><a class="viewcode-back" href="../../../iopi.html#pybot.abelec.iopi.DigitalOutput.__init__">[docs]</a>    <span class="k">def</span> <span class="nf">__init__</span><span class="p">(</span><span class="bp">self</span><span class="p">,</span> <span class="n">port</span><span class="p">,</span> <span class="n">num</span><span class="p">):</span>
+        <span class="sd">&quot;&quot;&quot;</span>
+<span class="sd">        :param Port port: the port this IO belongs to</span>
+<span class="sd">        :param int num: the IO number ([0-7])</span>
+<span class="sd">        &quot;&quot;&quot;</span>
+        <span class="nb">super</span><span class="p">(</span><span class="n">DigitalOutput</span><span class="p">,</span> <span class="bp">self</span><span class="p">)</span><span class="o">.</span><span class="n">__init__</span><span class="p">(</span><span class="n">port</span><span class="p">,</span> <span class="n">num</span><span class="p">,</span> <span class="n">is_input</span><span class="o">=</span><span class="bp">False</span><span class="p">)</span>
+</div>
+<div class="viewcode-block" id="DigitalOutput.set"><a class="viewcode-back" href="../../../iopi.html#pybot.abelec.iopi.DigitalOutput.set">[docs]</a>    <span class="k">def</span> <span class="nf">set</span><span class="p">(</span><span class="bp">self</span><span class="p">):</span>
+        <span class="sd">&quot;&quot;&quot; Turns the output high.&quot;&quot;&quot;</span>
+        <span class="bp">self</span><span class="o">.</span><span class="n">_port</span><span class="o">.</span><span class="n">write</span><span class="p">(</span><span class="bp">self</span><span class="o">.</span><span class="n">_port</span><span class="o">.</span><span class="n">read</span><span class="p">()</span> <span class="o">|</span> <span class="bp">self</span><span class="o">.</span><span class="n">_mask</span><span class="p">)</span>
+</div>
+<div class="viewcode-block" id="DigitalOutput.clear"><a class="viewcode-back" href="../../../iopi.html#pybot.abelec.iopi.DigitalOutput.clear">[docs]</a>    <span class="k">def</span> <span class="nf">clear</span><span class="p">(</span><span class="bp">self</span><span class="p">):</span>
+        <span class="sd">&quot;&quot;&quot; Turns the output low.&quot;&quot;&quot;</span>
+        <span class="bp">self</span><span class="o">.</span><span class="n">_port</span><span class="o">.</span><span class="n">write</span><span class="p">(</span><span class="bp">self</span><span class="o">.</span><span class="n">_port</span><span class="o">.</span><span class="n">read</span><span class="p">()</span> <span class="o">&amp;</span> <span class="p">(</span><span class="o">~</span> <span class="bp">self</span><span class="o">.</span><span class="n">_mask</span><span class="p">))</span></div></div>
+</pre></div>
+
+          </div>
+          <footer>
+  
+
+  <hr/>
+
+  <div role="contentinfo">
+    <p>
+        &copy; Copyright 2015, Eric Pascual.
+    </p>
+  </div>
+
+  Built with <a href="http://sphinx-doc.org/">Sphinx</a> using a <a href="https://github.com/snide/sphinx_rtd_theme">theme</a> provided by <a href="https://readthedocs.org">Read the Docs</a>.
+  
+</footer>
+        </div>
+      </div>
+
+    </section>
+
+  </div>
+  
+
+
+  
+
+    <script type="text/javascript">
+        var DOCUMENTATION_OPTIONS = {
+            URL_ROOT:'../../../',
+            VERSION:'1.0',
+            COLLAPSE_INDEX:false,
+            FILE_SUFFIX:'.html',
+            HAS_SOURCE:  true
+        };
+    </script>
+      <script type="text/javascript" src="../../../_static/jquery.js"></script>
+      <script type="text/javascript" src="../../../_static/underscore.js"></script>
+      <script type="text/javascript" src="../../../_static/doctools.js"></script>
+
+  
+
+  
+  
+    <script type="text/javascript" src="../../../_static/js/theme.js"></script>
+  
+
+  
+  
+  <script type="text/javascript">
+      jQuery(function () {
+          SphinxRtdTheme.StickyNav.enable();
+      });
+  </script>
+   
+
+</body>
+</html>

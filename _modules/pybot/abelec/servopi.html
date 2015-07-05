@@ -1,0 +1,548 @@
+
+
+<!DOCTYPE html>
+<!--[if IE 8]><html class="no-js lt-ie9" lang="en" > <![endif]-->
+<!--[if gt IE 8]><!--> <html class="no-js" lang="en" > <!--<![endif]-->
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  
+  <title>pybot.abelec.servopi &mdash; pybot-abelec from POBOT 1.0 documentation</title>
+  
+
+  
+  
+
+  
+  <link href='https://fonts.googleapis.com/css?family=Lato:400,700,400italic,700italic|Roboto+Slab:400,700|Inconsolata:400,700&subset=latin,cyrillic' rel='stylesheet' type='text/css'>
+
+  
+  
+    
+
+  
+
+  
+  
+    <link rel="stylesheet" href="../../../_static/css/theme.css" type="text/css" />
+  
+
+  
+
+  
+    <link rel="top" title="pybot-abelec from POBOT 1.0 documentation" href="../../../index.html"/>
+        <link rel="up" title="Module code" href="../../index.html"/> 
+
+  
+  <script src="https://cdnjs.cloudflare.com/ajax/libs/modernizr/2.6.2/modernizr.min.js"></script>
+
+</head>
+
+<body class="wy-body-for-nav" role="document">
+
+  <div class="wy-grid-for-nav">
+
+    
+    <nav data-toggle="wy-nav-shift" class="wy-nav-side">
+      <div class="wy-side-nav-search">
+        
+          <a href="../../../index.html" class="fa fa-home"> pybot-abelec from POBOT</a>
+        
+        
+<div role="search">
+  <form id="rtd-search-form" class="wy-form" action="../../../search.html" method="get">
+    <input type="text" name="q" placeholder="Search docs" />
+    <input type="hidden" name="check_keywords" value="yes" />
+    <input type="hidden" name="area" value="default" />
+  </form>
+</div>
+      </div>
+
+      <div class="wy-menu wy-menu-vertical" data-spy="affix" role="navigation" aria-label="main navigation">
+        
+          
+          
+              <ul>
+<li class="toctree-l1"><a class="reference internal" href="../../../adcpi.html"><code class="docutils literal"><span class="pre">pybot_abelec.adcpi</span></code> module</a></li>
+<li class="toctree-l1"><a class="reference internal" href="../../../iopi.html"><code class="docutils literal"><span class="pre">pybot_abelec.iopi</span></code> module</a></li>
+<li class="toctree-l1"><a class="reference internal" href="../../../servopi.html"><code class="docutils literal"><span class="pre">pybot_abelec.servopi</span></code> module</a></li>
+</ul>
+
+          
+        
+      </div>
+      &nbsp;
+    </nav>
+
+    <section data-toggle="wy-nav-shift" class="wy-nav-content-wrap">
+
+      
+      <nav class="wy-nav-top" role="navigation" aria-label="top navigation">
+        <i data-toggle="wy-nav-top" class="fa fa-bars"></i>
+        <a href="../../../index.html">pybot-abelec from POBOT</a>
+      </nav>
+
+
+      
+      <div class="wy-nav-content">
+        <div class="rst-content">
+          <div role="navigation" aria-label="breadcrumbs navigation">
+  <ul class="wy-breadcrumbs">
+    <li><a href="../../../index.html">Docs</a> &raquo;</li>
+      
+          <li><a href="../../index.html">Module code</a> &raquo;</li>
+      
+    <li>pybot.abelec.servopi</li>
+      <li class="wy-breadcrumbs-aside">
+        
+      </li>
+  </ul>
+  <hr/>
+</div>
+          <div role="main" class="document">
+            
+  <h1>Source code for pybot.abelec.servopi</h1><div class="highlight"><pre>
+<span class="c"># -*- coding: utf-8 -*-</span>
+
+<span class="sd">&quot;&quot;&quot; A set of simple classes for interacting with the ServoPi board from AB Electronics</span>
+<span class="sd">(https://www.abelectronics.co.uk/products/3/Raspberry-Pi/44/Servo-Pi).</span>
+
+<span class="sd">At the end of the chain is the individual servo, provided by the class :py:class:`Servo`.</span>
+<span class="sd">Instances are attached to a :py:class:`Port`, modeling a real MCP23017 port. Ports are themselves attached to a</span>
+<span class="sd">:py:class:`MCP23017`, which is itself attached to a :py:class:`IOPiBoard`.</span>
+
+<span class="sd">All intricacies related to registers configuration and alike are hidden from the user,</span>
+<span class="sd">and a lot of things are optimized by caching instances and data for avoiding paying a too high price</span>
+<span class="sd">for a high level design. Even if the added overhead could seem penalizing in term of performances,</span>
+<span class="sd">this is not that obvious, since all the processing done here must be done somewhere anyway. There</span>
+<span class="sd">are thus chances that the effective penalty (if ever any) will be negligible for most of the</span>
+<span class="sd">applications.</span>
+
+<span class="sd">To allow several classes instances being used for modeling a configuration with multiple boards,</span>
+<span class="sd">possibly of different types, the underlying bus must be created outside and provided as a dependency</span>
+<span class="sd">(see documentation about de &quot;Dependency Injection&quot; design pattern). Being able to provide whatever</span>
+<span class="sd">implementation of the basic read and write operations allows the use of a fake class simulating</span>
+<span class="sd">real operations, which made possible to test the rest of the application on a system not having</span>
+<span class="sd">a SMBus resource available, such as the development station PC for instance, or providing access to</span>
+<span class="sd">an I2C bus using an USB adapter for instance.</span>
+
+<span class="sd">Here is an example of the code used for configuring and reading an input.</span>
+
+<span class="sd">&gt;&gt;&gt; from pybot.raspi import i2c_bus</span>
+<span class="sd">&gt;&gt;&gt; from pybot.abelec.adcpi import ADCPiBoard</span>
+<span class="sd">&gt;&gt;&gt; ...</span>
+<span class="sd">&gt;&gt;&gt; # create an instance of the board (using default I2C addresses)</span>
+<span class="sd">&gt;&gt;&gt; board = ServoPiBoard(i2c_bus)</span>
+<span class="sd">&gt;&gt;&gt; # define a servo, connected to channel 1 on the board header</span>
+<span class="sd">&gt;&gt;&gt; servo = board.get_servo(1)</span>
+<span class="sd">&gt;&gt;&gt; ...</span>
+<span class="sd">&gt;&gt;&gt; # move it to median position</span>
+<span class="sd">&gt;&gt;&gt; servo.set_position(0.5)</span>
+
+<span class="sd">Pretty simple, no ?</span>
+
+<span class="sd">Beyond the basic usage illustrated above, the servo instance can be configured in a lot</span>
+<span class="sd">of different ways :</span>
+
+<span class="sd">    - pulse durations can be set to adapt to the model, or to limit the position extent</span>
+<span class="sd">    - custom values can be assigned to these limits, so that instead of manipulating the</span>
+<span class="sd">      angles in range 0 to 180, it is possible to use a percent of the total span, or</span>
+<span class="sd">      shift the angles domain to range -90.0 to 90.0, or any convention representing</span>
+<span class="sd">      something meaningful at the application level</span>
+
+<span class="sd">Refer to :py:class:`Servo` and :py:class:`StopSpecification` classes for details.</span>
+<span class="sd">&quot;&quot;&quot;</span>
+<span class="n">__author__</span> <span class="o">=</span> <span class="s">&#39;Eric PASCUAL for POBOT&#39;</span>
+<span class="n">__version__</span> <span class="o">=</span> <span class="s">&#39;1.0.0&#39;</span>
+<span class="n">__email__</span> <span class="o">=</span> <span class="s">&#39;eric@pobot.org&#39;</span>
+
+
+<span class="kn">import</span> <span class="nn">math</span>
+<span class="kn">import</span> <span class="nn">time</span>
+<span class="kn">from</span> <span class="nn">collections</span> <span class="kn">import</span> <span class="n">namedtuple</span>
+<span class="kn">from</span> <span class="nn">functools</span> <span class="kn">import</span> <span class="n">total_ordering</span>
+
+
+<span class="nd">@total_ordering</span>
+<div class="viewcode-block" id="StopSpecification"><a class="viewcode-back" href="../../../servopi.html#pybot.abelec.servopi.StopSpecification">[docs]</a><span class="k">class</span> <span class="nc">StopSpecification</span><span class="p">(</span><span class="n">namedtuple</span><span class="p">(</span><span class="s">&quot;StopSpecification&quot;</span><span class="p">,</span> <span class="s">&quot;position msecs&quot;</span><span class="p">)):</span>
+    <span class="sd">&quot;&quot;&quot; A named tuple defining a stop position (i.e. extent limit) of the servo.</span>
+
+<span class="sd">    The position is defined by the corresponding pulse duration and the associated</span>
+<span class="sd">    position. This value can be an angle in degrees or a linear position depending on the</span>
+<span class="sd">    servo type (rotation or linear motion).</span>
+
+<span class="sd">    Using pulse durations inside the physical limits of the servo provides a software extent</span>
+<span class="sd">    limitation, since the effective orders sent to the servo will never be outside this limited</span>
+<span class="sd">    range.</span>
+
+<span class="sd">    It is possible to inverse the rotation from its normal setting by reversing the values of</span>
+<span class="sd">    the stop positions.</span>
+
+<span class="sd">    An order relation is defined, based on the pulse duration (since the logical position can</span>
+<span class="sd">    be in reverse direction). The equality relation is based on both instance attributes.</span>
+<span class="sd">    &quot;&quot;&quot;</span>
+    <span class="n">__slots__</span> <span class="o">=</span> <span class="p">()</span>
+
+    <span class="k">def</span> <span class="nf">__new__</span><span class="p">(</span><span class="n">cls</span><span class="p">,</span> <span class="n">position</span><span class="p">,</span> <span class="n">msecs</span><span class="p">):</span>
+        <span class="sd">&quot;&quot;&quot;</span>
+<span class="sd">        :param float position: the application level value associated to this stop</span>
+<span class="sd">        :param float msecs: the associated pulse duration</span>
+<span class="sd">        :raise: ValueError if the duration is outside a reasonable range for servos</span>
+<span class="sd">        &quot;&quot;&quot;</span>
+        <span class="k">if</span> <span class="ow">not</span> <span class="mf">0.0</span> <span class="o">&lt;=</span> <span class="n">msecs</span> <span class="o">&lt;=</span> <span class="mf">3.0</span><span class="p">:</span>
+            <span class="k">raise</span> <span class="ne">ValueError</span><span class="p">(</span><span class="s">&#39;msecs must be in [0.0-3.0]&#39;</span><span class="p">)</span>
+        <span class="k">return</span> <span class="nb">super</span><span class="p">(</span><span class="n">StopSpecification</span><span class="p">,</span> <span class="n">cls</span><span class="p">)</span><span class="o">.</span><span class="n">__new__</span><span class="p">(</span><span class="n">cls</span><span class="p">,</span> <span class="nb">float</span><span class="p">(</span><span class="n">position</span><span class="p">),</span> <span class="nb">float</span><span class="p">(</span><span class="n">msecs</span><span class="p">))</span>
+
+    <span class="k">def</span> <span class="nf">__lt__</span><span class="p">(</span><span class="bp">self</span><span class="p">,</span> <span class="n">other</span><span class="p">):</span>
+        <span class="k">return</span> <span class="bp">self</span><span class="o">.</span><span class="n">msecs</span> <span class="o">&lt;</span> <span class="n">other</span><span class="o">.</span><span class="n">msecs</span>
+
+    <span class="k">def</span> <span class="nf">__le__</span><span class="p">(</span><span class="bp">self</span><span class="p">,</span> <span class="n">other</span><span class="p">):</span>
+        <span class="k">return</span> <span class="bp">self</span><span class="o">.</span><span class="n">msecs</span> <span class="o">&lt;=</span> <span class="n">other</span><span class="o">.</span><span class="n">msecs</span>
+
+    <span class="k">def</span> <span class="nf">__eq__</span><span class="p">(</span><span class="bp">self</span><span class="p">,</span> <span class="n">other</span><span class="p">):</span>
+        <span class="k">return</span> <span class="bp">self</span><span class="o">.</span><span class="n">msecs</span> <span class="o">==</span> <span class="n">other</span><span class="o">.</span><span class="n">msecs</span> <span class="ow">and</span> <span class="bp">self</span><span class="o">.</span><span class="n">position</span> <span class="o">==</span> <span class="n">other</span><span class="o">.</span><span class="n">position</span>
+
+    <span class="k">def</span> <span class="nf">__sub__</span><span class="p">(</span><span class="bp">self</span><span class="p">,</span> <span class="n">other</span><span class="p">):</span>
+        <span class="k">return</span> <span class="n">StopSpecification</span><span class="p">(</span><span class="bp">self</span><span class="o">.</span><span class="n">position</span> <span class="o">-</span> <span class="n">other</span><span class="o">.</span><span class="n">position</span><span class="p">,</span> <span class="bp">self</span><span class="o">.</span><span class="n">msecs</span> <span class="o">-</span> <span class="n">other</span><span class="o">.</span><span class="n">msecs</span><span class="p">)</span>
+
+    <span class="k">def</span> <span class="nf">__add__</span><span class="p">(</span><span class="bp">self</span><span class="p">,</span> <span class="n">other</span><span class="p">):</span>
+        <span class="k">return</span> <span class="n">StopSpecification</span><span class="p">(</span><span class="bp">self</span><span class="o">.</span><span class="n">position</span> <span class="o">+</span> <span class="n">other</span><span class="o">.</span><span class="n">position</span><span class="p">,</span> <span class="bp">self</span><span class="o">.</span><span class="n">msecs</span> <span class="o">+</span> <span class="n">other</span><span class="o">.</span><span class="n">msecs</span><span class="p">)</span>
+
+<div class="viewcode-block" id="StopSpecification.scale"><a class="viewcode-back" href="../../../servopi.html#pybot.abelec.servopi.StopSpecification.scale">[docs]</a>    <span class="k">def</span> <span class="nf">scale</span><span class="p">(</span><span class="bp">self</span><span class="p">,</span> <span class="n">factor</span><span class="p">):</span>
+        <span class="sd">&quot;&quot;&quot; Returns a scaled instance by multiplying both attributes by a given factor.</span>
+<span class="sd">        :param float factor: scaling factor</span>
+<span class="sd">        :return: a new instance, with attributes set to the original ones scaled</span>
+<span class="sd">        &quot;&quot;&quot;</span>
+        <span class="k">return</span> <span class="n">StopSpecification</span><span class="p">(</span><span class="bp">self</span><span class="o">.</span><span class="n">position</span> <span class="o">*</span> <span class="n">factor</span><span class="p">,</span> <span class="bp">self</span><span class="o">.</span><span class="n">msecs</span> <span class="o">*</span> <span class="n">factor</span><span class="p">)</span>
+</div>
+    <span class="k">def</span> <span class="nf">__str__</span><span class="p">(</span><span class="bp">self</span><span class="p">):</span>
+        <span class="k">return</span> <span class="s">&#39;(p:</span><span class="si">%.1f</span><span class="s"> t:</span><span class="si">%.1f</span><span class="s">)&#39;</span> <span class="o">%</span> <span class="p">(</span><span class="bp">self</span><span class="o">.</span><span class="n">position</span><span class="p">,</span> <span class="bp">self</span><span class="o">.</span><span class="n">msecs</span><span class="p">)</span>
+
+    <span class="nd">@classmethod</span>
+    <span class="k">def</span> <span class="nf">from_dict</span><span class="p">(</span><span class="n">cls</span><span class="p">,</span> <span class="n">d</span><span class="p">):</span>
+        <span class="k">return</span> <span class="n">cls</span><span class="p">(</span><span class="o">**</span><span class="nb">dict</span><span class="p">([(</span><span class="n">fld</span><span class="p">,</span> <span class="n">d</span><span class="p">[</span><span class="n">fld</span><span class="p">])</span> <span class="k">for</span> <span class="n">fld</span> <span class="ow">in</span> <span class="n">cls</span><span class="o">.</span><span class="n">_fields</span><span class="p">]))</span>
+
+</div>
+<div class="viewcode-block" id="Servo"><a class="viewcode-back" href="../../../servopi.html#pybot.abelec.servopi.Servo">[docs]</a><span class="k">class</span> <span class="nc">Servo</span><span class="p">(</span><span class="nb">object</span><span class="p">):</span>
+    <span class="sd">&quot;&quot;&quot; Logical model of a servo controlled by the board.</span>
+<span class="sd">    &quot;&quot;&quot;</span>
+    <span class="n">DEFAULT_POS_MIN</span><span class="p">,</span> <span class="n">DEFAULT_POS_MAX</span> <span class="o">=</span> <span class="p">(</span><span class="mf">0.0</span><span class="p">,</span> <span class="mf">180.0</span><span class="p">)</span>
+    <span class="n">DEFAULT_MS_MIN</span><span class="p">,</span> <span class="n">DEFAULT_MS_MAX</span> <span class="o">=</span> <span class="p">(</span><span class="mf">0.6</span><span class="p">,</span> <span class="mf">2.4</span><span class="p">)</span>
+
+    <span class="n">DEFAULT_STOP_MIN</span> <span class="o">=</span> <span class="n">StopSpecification</span><span class="p">(</span><span class="n">DEFAULT_POS_MIN</span><span class="p">,</span> <span class="n">DEFAULT_MS_MIN</span><span class="p">)</span>
+    <span class="n">DEFAULT_STOP_MAX</span> <span class="o">=</span> <span class="n">StopSpecification</span><span class="p">(</span><span class="n">DEFAULT_POS_MAX</span><span class="p">,</span> <span class="n">DEFAULT_MS_MAX</span><span class="p">)</span>
+
+<div class="viewcode-block" id="Servo.__init__"><a class="viewcode-back" href="../../../servopi.html#pybot.abelec.servopi.Servo.__init__">[docs]</a>    <span class="k">def</span> <span class="nf">__init__</span><span class="p">(</span><span class="bp">self</span><span class="p">,</span> <span class="n">board</span><span class="p">,</span> <span class="n">channel</span><span class="p">,</span> <span class="n">stop_min</span><span class="o">=</span><span class="n">DEFAULT_STOP_MIN</span><span class="p">,</span> <span class="n">stop_max</span><span class="o">=</span><span class="n">DEFAULT_STOP_MAX</span><span class="p">):</span>
+        <span class="sd">&quot;&quot;&quot; If default settings are used, the servo model is supposed to honor a standard</span>
+<span class="sd">        0.5 to 2.5 ms pulse for a 180 degrees total horn course counted clockwise. The servo position</span>
+<span class="sd">        will thus be given in subsequent calls as a floating point value representing the horn angle in degrees.</span>
+
+<span class="sd">        This can be customized by specifying specific stop position definition, both in terms of pulse width</span>
+<span class="sd">        and associated application level position value.</span>
+
+<span class="sd">        :param ServoPiBoard board: the ServoPi board controlling the servo</span>
+<span class="sd">        :param int channel: the channel (1 to 16) to which the servo is connected</span>
+<span class="sd">        :param StopSpecification stop_min: specifications of the min stop position (position with the shorter pulse),</span>
+<span class="sd">            if not the default one</span>
+<span class="sd">        :param StopSpecification stop_max: specifications of the max stop position, if not the default one</span>
+<span class="sd">        :raise: ValueError if a parameter value is not valid</span>
+<span class="sd">        :raise: TypeError if the stop definitions are not of the expected type</span>
+<span class="sd">        &quot;&quot;&quot;</span>
+        <span class="k">if</span> <span class="ow">not</span> <span class="n">board</span><span class="p">:</span>
+            <span class="k">raise</span> <span class="ne">ValueError</span><span class="p">(</span><span class="s">&#39;board parameter is mandatory&#39;</span><span class="p">)</span>
+        <span class="k">if</span> <span class="ow">not</span> <span class="mi">1</span> <span class="o">&lt;=</span> <span class="n">channel</span> <span class="o">&lt;=</span> <span class="mi">16</span><span class="p">:</span>
+            <span class="k">raise</span> <span class="ne">ValueError</span><span class="p">(</span><span class="s">&#39;channel must be in [1-16]&#39;</span><span class="p">)</span>
+        <span class="k">if</span> <span class="ow">not</span> <span class="p">(</span><span class="nb">isinstance</span><span class="p">(</span><span class="n">stop_min</span><span class="p">,</span> <span class="n">StopSpecification</span><span class="p">)</span> <span class="ow">and</span> <span class="nb">isinstance</span><span class="p">(</span><span class="n">stop_max</span><span class="p">,</span> <span class="n">StopSpecification</span><span class="p">)):</span>
+            <span class="k">raise</span> <span class="ne">TypeError</span><span class="p">(</span><span class="s">&#39;invalid stop definition(s) type&#39;</span><span class="p">)</span>
+        <span class="k">if</span> <span class="n">stop_max</span> <span class="o">&lt;=</span> <span class="n">stop_min</span><span class="p">:</span>
+            <span class="k">raise</span> <span class="ne">ValueError</span><span class="p">(</span><span class="s">&#39;stop definitions are reversed&#39;</span><span class="p">)</span>
+
+        <span class="bp">self</span><span class="o">.</span><span class="n">_board</span> <span class="o">=</span> <span class="n">board</span>
+        <span class="n">channel</span> <span class="o">-=</span> <span class="mi">1</span>
+        <span class="bp">self</span><span class="o">.</span><span class="n">_regs</span> <span class="o">=</span> <span class="p">[</span><span class="n">r</span> <span class="o">+</span> <span class="mi">4</span> <span class="o">*</span> <span class="n">channel</span> <span class="k">for</span> <span class="n">r</span> <span class="ow">in</span> <span class="n">ServoPiBoard</span><span class="o">.</span><span class="n">LED0_x</span><span class="p">]</span>
+        <span class="bp">self</span><span class="o">.</span><span class="n">_stop_min</span> <span class="o">=</span> <span class="n">stop_min</span>
+        <span class="bp">self</span><span class="o">.</span><span class="n">_stop_max</span> <span class="o">=</span> <span class="n">stop_max</span>
+        <span class="bp">self</span><span class="o">.</span><span class="n">_median</span> <span class="o">=</span> <span class="p">(</span><span class="n">stop_min</span> <span class="o">+</span> <span class="n">stop_max</span><span class="p">)</span><span class="o">.</span><span class="n">scale</span><span class="p">(</span><span class="mf">0.5</span><span class="p">)</span>
+        <span class="bp">self</span><span class="o">.</span><span class="n">_span</span> <span class="o">=</span> <span class="n">stop_max</span> <span class="o">-</span> <span class="n">stop_min</span>
+        <span class="bp">self</span><span class="o">.</span><span class="n">_pos_to_ms</span> <span class="o">=</span> <span class="nb">float</span><span class="p">(</span><span class="bp">self</span><span class="o">.</span><span class="n">_span</span><span class="o">.</span><span class="n">msecs</span><span class="p">)</span> <span class="o">/</span> <span class="nb">float</span><span class="p">(</span><span class="bp">self</span><span class="o">.</span><span class="n">_span</span><span class="o">.</span><span class="n">position</span><span class="p">)</span>
+        <span class="bp">self</span><span class="o">.</span><span class="n">_position_to_msecs</span> <span class="o">=</span> <span class="bp">self</span><span class="o">.</span><span class="n">_position_to_msec_direct</span> <span class="k">if</span> <span class="bp">self</span><span class="o">.</span><span class="n">_pos_to_ms</span> <span class="o">&gt;</span> <span class="mi">0</span> <span class="k">else</span> <span class="bp">self</span><span class="o">.</span><span class="n">_position_to_msec_inverted</span>
+        <span class="bp">self</span><span class="o">.</span><span class="n">_current_position</span> <span class="o">=</span> <span class="bp">None</span>
+</div>
+    <span class="k">def</span> <span class="nf">__str__</span><span class="p">(</span><span class="bp">self</span><span class="p">):</span>
+        <span class="k">return</span> <span class="s">&quot;{min=</span><span class="si">%s</span><span class="s"> max=</span><span class="si">%s</span><span class="s">}&quot;</span> <span class="o">%</span> <span class="p">(</span><span class="bp">self</span><span class="o">.</span><span class="n">_stop_min</span><span class="p">,</span> <span class="bp">self</span><span class="o">.</span><span class="n">_stop_max</span><span class="p">)</span>
+
+    <span class="n">__repr__</span> <span class="o">=</span> <span class="n">__str__</span>
+
+    <span class="k">def</span> <span class="nf">_position_to_msec_direct</span><span class="p">(</span><span class="bp">self</span><span class="p">,</span> <span class="n">position</span><span class="p">):</span>
+        <span class="n">position</span> <span class="o">=</span> <span class="nb">min</span><span class="p">(</span><span class="nb">max</span><span class="p">(</span><span class="n">position</span><span class="p">,</span> <span class="bp">self</span><span class="o">.</span><span class="n">_stop_min</span><span class="o">.</span><span class="n">position</span><span class="p">),</span> <span class="bp">self</span><span class="o">.</span><span class="n">_stop_max</span><span class="o">.</span><span class="n">position</span><span class="p">)</span>
+        <span class="k">return</span> <span class="bp">self</span><span class="o">.</span><span class="n">_stop_min</span><span class="o">.</span><span class="n">msecs</span> <span class="o">+</span> <span class="bp">self</span><span class="o">.</span><span class="n">_pos_to_ms</span> <span class="o">*</span> <span class="p">(</span><span class="n">position</span> <span class="o">-</span> <span class="bp">self</span><span class="o">.</span><span class="n">_stop_min</span><span class="o">.</span><span class="n">position</span><span class="p">),</span> <span class="n">position</span>
+
+    <span class="k">def</span> <span class="nf">_position_to_msec_inverted</span><span class="p">(</span><span class="bp">self</span><span class="p">,</span> <span class="n">position</span><span class="p">):</span>
+        <span class="n">position</span> <span class="o">=</span> <span class="nb">min</span><span class="p">(</span><span class="nb">max</span><span class="p">(</span><span class="n">position</span><span class="p">,</span> <span class="bp">self</span><span class="o">.</span><span class="n">_stop_max</span><span class="o">.</span><span class="n">position</span><span class="p">),</span> <span class="bp">self</span><span class="o">.</span><span class="n">_stop_min</span><span class="o">.</span><span class="n">position</span><span class="p">)</span>
+        <span class="k">return</span> <span class="bp">self</span><span class="o">.</span><span class="n">_stop_max</span><span class="o">.</span><span class="n">msecs</span> <span class="o">+</span> <span class="bp">self</span><span class="o">.</span><span class="n">_pos_to_ms</span> <span class="o">*</span> <span class="p">(</span><span class="n">position</span> <span class="o">-</span> <span class="bp">self</span><span class="o">.</span><span class="n">_stop_max</span><span class="o">.</span><span class="n">position</span><span class="p">),</span> <span class="n">position</span>
+
+<div class="viewcode-block" id="Servo.set_position"><a class="viewcode-back" href="../../../servopi.html#pybot.abelec.servopi.Servo.set_position">[docs]</a>    <span class="k">def</span> <span class="nf">set_position</span><span class="p">(</span><span class="bp">self</span><span class="p">,</span> <span class="n">position</span><span class="p">,</span> <span class="n">force</span><span class="o">=</span><span class="bp">False</span><span class="p">):</span>
+        <span class="sd">&quot;&quot;&quot; Moves the servo to the given position.</span>
+
+<span class="sd">        No move is done if the requested position is the same as the current one,</span>
+<span class="sd">        except if the `force` parameter is set to True.</span>
+
+<span class="sd">        :param float position: the servo position (see :py:meth:`Servo.__init__` documentation for</span>
+<span class="sd">            possible values</span>
+<span class="sd">        :param bool force: if True, the move process will be engaged, whatever is the current position</span>
+<span class="sd">        &quot;&quot;&quot;</span>
+        <span class="k">if</span> <span class="ow">not</span> <span class="n">force</span> <span class="ow">and</span> <span class="n">position</span> <span class="o">==</span> <span class="bp">self</span><span class="o">.</span><span class="n">_current_position</span><span class="p">:</span>
+            <span class="k">return</span>
+
+        <span class="n">ms</span><span class="p">,</span> <span class="n">real_position</span> <span class="o">=</span> <span class="bp">self</span><span class="o">.</span><span class="n">_position_to_msecs</span><span class="p">(</span><span class="n">position</span><span class="p">)</span>
+        <span class="n">raw</span> <span class="o">=</span> <span class="bp">self</span><span class="o">.</span><span class="n">_board</span><span class="o">.</span><span class="n">ms_to_reg</span><span class="p">(</span><span class="n">ms</span><span class="p">)</span>
+        <span class="n">values</span> <span class="o">=</span> <span class="p">(</span><span class="mi">0</span><span class="p">,</span> <span class="mi">0</span><span class="p">,</span> <span class="n">raw</span> <span class="o">&amp;</span> <span class="mh">0xff</span><span class="p">,</span> <span class="n">raw</span> <span class="o">&gt;&gt;</span> <span class="mi">8</span><span class="p">)</span>
+        <span class="k">for</span> <span class="n">r</span><span class="p">,</span> <span class="n">v</span> <span class="ow">in</span> <span class="nb">zip</span><span class="p">(</span><span class="bp">self</span><span class="o">.</span><span class="n">_regs</span><span class="p">,</span> <span class="n">values</span><span class="p">):</span>
+            <span class="bp">self</span><span class="o">.</span><span class="n">_board</span><span class="o">.</span><span class="n">write_reg</span><span class="p">(</span><span class="n">r</span><span class="p">,</span> <span class="n">v</span><span class="p">)</span>
+        <span class="bp">self</span><span class="o">.</span><span class="n">_current_position</span> <span class="o">=</span> <span class="n">real_position</span>
+</div>
+    <span class="nd">@property</span>
+    <span class="k">def</span> <span class="nf">current_position</span><span class="p">(</span><span class="bp">self</span><span class="p">):</span>
+        <span class="sd">&quot;&quot;&quot; The current position set point. Be aware that it can be different from the real</span>
+<span class="sd">        position, either because it didn&#39;t reach it already, or cannot do it.</span>
+<span class="sd">        &quot;&quot;&quot;</span>
+        <span class="k">return</span> <span class="bp">self</span><span class="o">.</span><span class="n">_current_position</span>
+
+<div class="viewcode-block" id="Servo.goto_minimum_position"><a class="viewcode-back" href="../../../servopi.html#pybot.abelec.servopi.Servo.goto_minimum_position">[docs]</a>    <span class="k">def</span> <span class="nf">goto_minimum_position</span><span class="p">(</span><span class="bp">self</span><span class="p">,</span> <span class="n">force</span><span class="o">=</span><span class="bp">False</span><span class="p">):</span>
+        <span class="sd">&quot;&quot;&quot; Moves the servo to its minimum position as defined by `stop_min` constructor parameter.</span>
+
+<span class="sd">        :param bool force: see :py:meth:`Servo.set_position`</span>
+<span class="sd">        &quot;&quot;&quot;</span>
+        <span class="bp">self</span><span class="o">.</span><span class="n">set_position</span><span class="p">(</span><span class="bp">self</span><span class="o">.</span><span class="n">_stop_min</span><span class="o">.</span><span class="n">position</span><span class="p">,</span> <span class="n">force</span><span class="p">)</span>
+</div>
+<div class="viewcode-block" id="Servo.goto_maximum_position"><a class="viewcode-back" href="../../../servopi.html#pybot.abelec.servopi.Servo.goto_maximum_position">[docs]</a>    <span class="k">def</span> <span class="nf">goto_maximum_position</span><span class="p">(</span><span class="bp">self</span><span class="p">,</span> <span class="n">force</span><span class="o">=</span><span class="bp">False</span><span class="p">):</span>
+        <span class="sd">&quot;&quot;&quot; Moves the servo to its maximum position as defined by `stop_max` constructor parameter.</span>
+
+<span class="sd">        :param bool force: see :py:meth:`Servo.set_position`</span>
+<span class="sd">        &quot;&quot;&quot;</span>
+        <span class="bp">self</span><span class="o">.</span><span class="n">set_position</span><span class="p">(</span><span class="bp">self</span><span class="o">.</span><span class="n">_stop_max</span><span class="o">.</span><span class="n">position</span><span class="p">,</span> <span class="n">force</span><span class="p">)</span>
+</div>
+<div class="viewcode-block" id="Servo.goto_median_position"><a class="viewcode-back" href="../../../servopi.html#pybot.abelec.servopi.Servo.goto_median_position">[docs]</a>    <span class="k">def</span> <span class="nf">goto_median_position</span><span class="p">(</span><span class="bp">self</span><span class="p">,</span> <span class="n">force</span><span class="o">=</span><span class="bp">False</span><span class="p">):</span>
+        <span class="sd">&quot;&quot;&quot; Moves the servo half way between its minimum and maximum positions.</span>
+
+<span class="sd">        :param bool force: see :py:meth:`Servo.set_position`</span>
+<span class="sd">        &quot;&quot;&quot;</span>
+        <span class="bp">self</span><span class="o">.</span><span class="n">set_position</span><span class="p">(</span><span class="bp">self</span><span class="o">.</span><span class="n">_median</span><span class="o">.</span><span class="n">position</span><span class="p">,</span> <span class="n">force</span><span class="p">)</span>
+</div>
+<div class="viewcode-block" id="Servo.relative_move"><a class="viewcode-back" href="../../../servopi.html#pybot.abelec.servopi.Servo.relative_move">[docs]</a>    <span class="k">def</span> <span class="nf">relative_move</span><span class="p">(</span><span class="bp">self</span><span class="p">,</span> <span class="n">d_position</span><span class="p">,</span> <span class="n">force</span><span class="o">=</span><span class="bp">False</span><span class="p">):</span>
+        <span class="sd">&quot;&quot;&quot; Moves the servo by a relative amount from its current set point.</span>
+
+<span class="sd">        This method requires an absolute position being previously set.</span>
+
+<span class="sd">        :param float d_position: the relative move, provided in application logical unit</span>
+<span class="sd">        :param bool force: see :py:meth:`Servo.set_position`</span>
+<span class="sd">        &quot;&quot;&quot;</span>
+        <span class="k">if</span> <span class="ow">not</span> <span class="n">d_position</span><span class="p">:</span>
+            <span class="k">return</span>
+        <span class="k">if</span> <span class="bp">self</span><span class="o">.</span><span class="n">_current_position</span> <span class="ow">is</span> <span class="bp">None</span><span class="p">:</span>
+            <span class="k">raise</span> <span class="ne">Exception</span><span class="p">(</span><span class="s">&quot;current position not yet defined&quot;</span><span class="p">)</span>
+        <span class="bp">self</span><span class="o">.</span><span class="n">set_position</span><span class="p">(</span><span class="bp">self</span><span class="o">.</span><span class="n">_current_position</span> <span class="o">+</span> <span class="n">d_position</span><span class="p">,</span> <span class="n">force</span><span class="p">)</span>
+</div>
+<div class="viewcode-block" id="Servo.set_floating"><a class="viewcode-back" href="../../../servopi.html#pybot.abelec.servopi.Servo.set_floating">[docs]</a>    <span class="k">def</span> <span class="nf">set_floating</span><span class="p">(</span><span class="bp">self</span><span class="p">):</span>
+        <span class="sd">&quot;&quot;&quot; Puts the servo in floating mode by deactivating pulses generation.</span>
+<span class="sd">        &quot;&quot;&quot;</span>
+        <span class="k">for</span> <span class="n">r</span> <span class="ow">in</span> <span class="bp">self</span><span class="o">.</span><span class="n">_regs</span><span class="p">:</span>
+            <span class="bp">self</span><span class="o">.</span><span class="n">_board</span><span class="o">.</span><span class="n">write_reg</span><span class="p">(</span><span class="n">r</span><span class="p">,</span> <span class="mi">0</span><span class="p">)</span>
+
+</div></div>
+<div class="viewcode-block" id="ServoPiBoard"><a class="viewcode-back" href="../../../servopi.html#pybot.abelec.servopi.ServoPiBoard">[docs]</a><span class="k">class</span> <span class="nc">ServoPiBoard</span><span class="p">(</span><span class="nb">object</span><span class="p">):</span>
+    <span class="sd">&quot;&quot;&quot; Models the ServoPi board.</span>
+
+<span class="sd">    In addition to global configuration and chip dialogs, it provides a factory method to</span>
+<span class="sd">    obtain Servo instances attached to it. Returned instances are cached for optimizing</span>
+<span class="sd">    identical requests.</span>
+<span class="sd">    &quot;&quot;&quot;</span>
+
+    <span class="n">MODE1</span> <span class="o">=</span> <span class="mh">0x00</span>
+    <span class="n">MODE2</span> <span class="o">=</span> <span class="mh">0x01</span>
+    <span class="n">SUBADR1</span> <span class="o">=</span> <span class="mh">0x02</span>
+    <span class="n">SUBADR2</span> <span class="o">=</span> <span class="mh">0x03</span>
+    <span class="n">SUBADR3</span> <span class="o">=</span> <span class="mh">0x04</span>
+    <span class="n">ALLCALLADR</span> <span class="o">=</span> <span class="mh">0x05</span>
+    <span class="n">LED0_ON_L</span> <span class="o">=</span> <span class="mh">0x06</span>
+    <span class="n">LED0_ON_H</span> <span class="o">=</span> <span class="mh">0x07</span>
+    <span class="n">LED0_OFF_L</span> <span class="o">=</span> <span class="mh">0x08</span>
+    <span class="n">LED0_OFF_H</span> <span class="o">=</span> <span class="mh">0x09</span>
+    <span class="n">ALL_LED_ON_L</span> <span class="o">=</span> <span class="mh">0xFA</span>
+    <span class="n">ALL_LED_ON_H</span> <span class="o">=</span> <span class="mh">0xFB</span>
+    <span class="n">ALL_LED_OFF_L</span> <span class="o">=</span> <span class="mh">0xFC</span>
+    <span class="n">ALL_LED_OFF_H</span> <span class="o">=</span> <span class="mh">0xFD</span>
+    <span class="n">PRE_SCALE</span> <span class="o">=</span> <span class="mh">0xFE</span>
+
+    <span class="n">LED0_x</span> <span class="o">=</span> <span class="p">(</span><span class="n">LED0_ON_L</span><span class="p">,</span> <span class="n">LED0_ON_H</span><span class="p">,</span> <span class="n">LED0_OFF_L</span><span class="p">,</span> <span class="n">LED0_OFF_H</span><span class="p">)</span>
+
+    <span class="n">_ENABLE_GPIO</span> <span class="o">=</span> <span class="mi">7</span>
+
+    <span class="n">DEFAULT_ADDRESS</span> <span class="o">=</span> <span class="mh">0x40</span>
+    <span class="n">DEFAULT_PWM_FREQ</span> <span class="o">=</span> <span class="mi">60</span>
+
+    <span class="n">_ms_to_reg</span> <span class="o">=</span> <span class="bp">None</span>
+
+<div class="viewcode-block" id="ServoPiBoard.__init__"><a class="viewcode-back" href="../../../servopi.html#pybot.abelec.servopi.ServoPiBoard.__init__">[docs]</a>    <span class="k">def</span> <span class="nf">__init__</span><span class="p">(</span><span class="bp">self</span><span class="p">,</span> <span class="n">bus</span><span class="p">,</span> <span class="n">i2c_addr</span><span class="o">=</span><span class="n">DEFAULT_ADDRESS</span><span class="p">,</span> <span class="n">pwm_freq</span><span class="o">=</span><span class="n">DEFAULT_PWM_FREQ</span><span class="p">,</span> <span class="n">use_output_enable</span><span class="o">=</span><span class="bp">False</span><span class="p">):</span>
+        <span class="sd">&quot;&quot;&quot;</span>
+<span class="sd">        :param bus: the I2C/SMBus the board is connected to</span>
+<span class="sd">        :param int i2c_addr: the board I2C address</span>
+<span class="sd">        :param int pwm_freq: the PWM frequency</span>
+<span class="sd">        :param bool use_output_enable: set to True if we want to use the output enable signal of the</span>
+<span class="sd">          PCA9685 chip. Remember to short the OE pads on the board in this case.</span>
+<span class="sd">        &quot;&quot;&quot;</span>
+        <span class="bp">self</span><span class="o">.</span><span class="n">_bus</span> <span class="o">=</span> <span class="n">bus</span>
+        <span class="bp">self</span><span class="o">.</span><span class="n">_i2c_addr</span> <span class="o">=</span> <span class="n">i2c_addr</span>
+        <span class="bp">self</span><span class="o">.</span><span class="n">_servos</span> <span class="o">=</span> <span class="p">{}</span>
+
+        <span class="bp">self</span><span class="o">.</span><span class="n">write_reg</span><span class="p">(</span><span class="bp">self</span><span class="o">.</span><span class="n">MODE1</span><span class="p">,</span> <span class="mi">0</span><span class="p">)</span>
+
+        <span class="c"># optimize to GPIO stuff loading depending on the fact we really need it or not</span>
+        <span class="k">if</span> <span class="n">use_output_enable</span><span class="p">:</span>
+            <span class="kn">from</span> <span class="nn">pybot.gpio</span> <span class="kn">import</span> <span class="n">GPIO</span>
+            <span class="bp">self</span><span class="o">.</span><span class="n">_GPIO</span> <span class="o">=</span> <span class="n">GPIO</span>
+            <span class="n">GPIO</span><span class="o">.</span><span class="n">setwarnings</span><span class="p">(</span><span class="bp">False</span><span class="p">)</span>
+            <span class="n">GPIO</span><span class="o">.</span><span class="n">setmode</span><span class="p">(</span><span class="n">GPIO</span><span class="o">.</span><span class="n">BOARD</span><span class="p">)</span>
+            <span class="n">GPIO</span><span class="o">.</span><span class="n">setup</span><span class="p">(</span><span class="bp">self</span><span class="o">.</span><span class="n">_ENABLE_GPIO</span><span class="p">,</span> <span class="n">GPIO</span><span class="o">.</span><span class="n">OUT</span><span class="p">)</span>
+            <span class="bp">self</span><span class="o">.</span><span class="n">enable_all</span><span class="p">()</span>
+        <span class="k">else</span><span class="p">:</span>
+            <span class="bp">self</span><span class="o">.</span><span class="n">_GPIO</span> <span class="o">=</span> <span class="bp">None</span>
+
+        <span class="bp">self</span><span class="o">.</span><span class="n">set_pwm_freq</span><span class="p">(</span><span class="n">pwm_freq</span><span class="p">)</span>
+</div>
+<div class="viewcode-block" id="ServoPiBoard.shutdown"><a class="viewcode-back" href="../../../servopi.html#pybot.abelec.servopi.ServoPiBoard.shutdown">[docs]</a>    <span class="k">def</span> <span class="nf">shutdown</span><span class="p">(</span><span class="bp">self</span><span class="p">):</span>
+        <span class="sd">&quot;&quot;&quot; Puts all servos in floating mode and disables PCA9685 outputs.</span>
+<span class="sd">        &quot;&quot;&quot;</span>
+        <span class="k">for</span> <span class="n">servo</span> <span class="ow">in</span> <span class="bp">self</span><span class="o">.</span><span class="n">_servos</span><span class="o">.</span><span class="n">values</span><span class="p">():</span>
+            <span class="n">servo</span><span class="o">.</span><span class="n">set_floating</span><span class="p">()</span>
+        <span class="bp">self</span><span class="o">.</span><span class="n">disable_all</span><span class="p">()</span>
+</div>
+<div class="viewcode-block" id="ServoPiBoard.set_pwm_freq"><a class="viewcode-back" href="../../../servopi.html#pybot.abelec.servopi.ServoPiBoard.set_pwm_freq">[docs]</a>    <span class="k">def</span> <span class="nf">set_pwm_freq</span><span class="p">(</span><span class="bp">self</span><span class="p">,</span> <span class="n">hz</span><span class="p">):</span>
+        <span class="sd">&quot;&quot;&quot; Configures the PWM frequency</span>
+<span class="sd">        :param int hz: frequency</span>
+<span class="sd">        &quot;&quot;&quot;</span>
+        <span class="n">scale_value</span> <span class="o">=</span> <span class="mf">25000000.0</span>    <span class="c"># 25MHz</span>
+        <span class="n">scale_value</span> <span class="o">/=</span> <span class="mf">4096.0</span>       <span class="c"># 12-bit</span>
+        <span class="n">scale_value</span> <span class="o">/=</span> <span class="nb">float</span><span class="p">(</span><span class="n">hz</span><span class="p">)</span>
+        <span class="n">scale_value</span> <span class="o">-=</span> <span class="mf">1.0</span>
+
+        <span class="bp">self</span><span class="o">.</span><span class="n">_ms_to_reg</span> <span class="o">=</span> <span class="mf">4.096</span> <span class="o">*</span> <span class="n">hz</span>
+
+        <span class="n">pre_scale</span> <span class="o">=</span> <span class="n">math</span><span class="o">.</span><span class="n">floor</span><span class="p">(</span><span class="n">scale_value</span> <span class="o">+</span> <span class="mf">0.5</span><span class="p">)</span>
+        <span class="n">old_mode</span> <span class="o">=</span> <span class="bp">self</span><span class="o">.</span><span class="n">read_reg</span><span class="p">(</span><span class="bp">self</span><span class="o">.</span><span class="n">MODE1</span><span class="p">)</span>
+        <span class="n">new_mode</span> <span class="o">=</span> <span class="p">(</span><span class="n">old_mode</span> <span class="o">&amp;</span> <span class="mh">0x7F</span><span class="p">)</span> <span class="o">|</span> <span class="mh">0x10</span>
+
+        <span class="bp">self</span><span class="o">.</span><span class="n">write_reg</span><span class="p">(</span><span class="bp">self</span><span class="o">.</span><span class="n">MODE1</span><span class="p">,</span> <span class="n">new_mode</span><span class="p">)</span>
+        <span class="bp">self</span><span class="o">.</span><span class="n">write_reg</span><span class="p">(</span><span class="bp">self</span><span class="o">.</span><span class="n">PRE_SCALE</span><span class="p">,</span> <span class="nb">int</span><span class="p">(</span><span class="n">math</span><span class="o">.</span><span class="n">floor</span><span class="p">(</span><span class="n">pre_scale</span><span class="p">)))</span>
+        <span class="bp">self</span><span class="o">.</span><span class="n">write_reg</span><span class="p">(</span><span class="bp">self</span><span class="o">.</span><span class="n">MODE1</span><span class="p">,</span> <span class="n">old_mode</span><span class="p">)</span>
+        <span class="n">time</span><span class="o">.</span><span class="n">sleep</span><span class="p">(</span><span class="mf">0.005</span><span class="p">)</span>
+        <span class="bp">self</span><span class="o">.</span><span class="n">write_reg</span><span class="p">(</span><span class="bp">self</span><span class="o">.</span><span class="n">MODE1</span><span class="p">,</span> <span class="n">old_mode</span> <span class="o">|</span> <span class="mh">0x80</span><span class="p">)</span>
+</div>
+<div class="viewcode-block" id="ServoPiBoard.enable_all"><a class="viewcode-back" href="../../../servopi.html#pybot.abelec.servopi.ServoPiBoard.enable_all">[docs]</a>    <span class="k">def</span> <span class="nf">enable_all</span><span class="p">(</span><span class="bp">self</span><span class="p">):</span>
+        <span class="sd">&quot;&quot;&quot; Enables all the chip outputs</span>
+<span class="sd">        &quot;&quot;&quot;</span>
+        <span class="k">if</span> <span class="bp">self</span><span class="o">.</span><span class="n">_GPIO</span><span class="p">:</span>
+            <span class="bp">self</span><span class="o">.</span><span class="n">_GPIO</span><span class="o">.</span><span class="n">output</span><span class="p">(</span><span class="bp">self</span><span class="o">.</span><span class="n">_ENABLE_GPIO</span><span class="p">,</span> <span class="mi">0</span><span class="p">)</span>
+</div>
+<div class="viewcode-block" id="ServoPiBoard.disable_all"><a class="viewcode-back" href="../../../servopi.html#pybot.abelec.servopi.ServoPiBoard.disable_all">[docs]</a>    <span class="k">def</span> <span class="nf">disable_all</span><span class="p">(</span><span class="bp">self</span><span class="p">):</span>
+        <span class="sd">&quot;&quot;&quot; Disables all the chip outputs</span>
+<span class="sd">        &quot;&quot;&quot;</span>
+        <span class="k">if</span> <span class="bp">self</span><span class="o">.</span><span class="n">_GPIO</span><span class="p">:</span>
+            <span class="bp">self</span><span class="o">.</span><span class="n">_GPIO</span><span class="o">.</span><span class="n">output</span><span class="p">(</span><span class="bp">self</span><span class="o">.</span><span class="n">_ENABLE_GPIO</span><span class="p">,</span> <span class="mi">1</span><span class="p">)</span>
+</div>
+<div class="viewcode-block" id="ServoPiBoard.write_reg"><a class="viewcode-back" href="../../../servopi.html#pybot.abelec.servopi.ServoPiBoard.write_reg">[docs]</a>    <span class="k">def</span> <span class="nf">write_reg</span><span class="p">(</span><span class="bp">self</span><span class="p">,</span> <span class="n">reg</span><span class="p">,</span> <span class="n">value</span><span class="p">):</span>
+        <span class="sd">&quot;&quot;&quot; Chip register setter</span>
+<span class="sd">        &quot;&quot;&quot;</span>
+        <span class="bp">self</span><span class="o">.</span><span class="n">_bus</span><span class="o">.</span><span class="n">write_byte_data</span><span class="p">(</span><span class="bp">self</span><span class="o">.</span><span class="n">_i2c_addr</span><span class="p">,</span> <span class="n">reg</span><span class="p">,</span> <span class="n">value</span><span class="p">)</span>
+</div>
+<div class="viewcode-block" id="ServoPiBoard.read_reg"><a class="viewcode-back" href="../../../servopi.html#pybot.abelec.servopi.ServoPiBoard.read_reg">[docs]</a>    <span class="k">def</span> <span class="nf">read_reg</span><span class="p">(</span><span class="bp">self</span><span class="p">,</span> <span class="n">reg</span><span class="p">):</span>
+        <span class="sd">&quot;&quot;&quot; Chip register getter</span>
+<span class="sd">        &quot;&quot;&quot;</span>
+        <span class="k">return</span> <span class="bp">self</span><span class="o">.</span><span class="n">_bus</span><span class="o">.</span><span class="n">read_byte_data</span><span class="p">(</span><span class="bp">self</span><span class="o">.</span><span class="n">_i2c_addr</span><span class="p">,</span> <span class="n">reg</span><span class="p">)</span> <span class="o">&amp;</span> <span class="mh">0xff</span>
+</div>
+<div class="viewcode-block" id="ServoPiBoard.ms_to_reg"><a class="viewcode-back" href="../../../servopi.html#pybot.abelec.servopi.ServoPiBoard.ms_to_reg">[docs]</a>    <span class="k">def</span> <span class="nf">ms_to_reg</span><span class="p">(</span><span class="bp">self</span><span class="p">,</span> <span class="n">ms</span><span class="p">):</span>
+        <span class="sd">&quot;&quot;&quot; Convenience method for converting a duration to the corresponding register encoding value.</span>
+<span class="sd">        :param float ms: duration to convert</span>
+<span class="sd">        :return: corresponding register encoded value</span>
+<span class="sd">        :rtype: int</span>
+<span class="sd">        &quot;&quot;&quot;</span>
+        <span class="k">return</span> <span class="nb">int</span><span class="p">(</span><span class="n">ms</span> <span class="o">*</span> <span class="bp">self</span><span class="o">.</span><span class="n">_ms_to_reg</span><span class="p">)</span>
+</div>
+<div class="viewcode-block" id="ServoPiBoard.get_servo"><a class="viewcode-back" href="../../../servopi.html#pybot.abelec.servopi.ServoPiBoard.get_servo">[docs]</a>    <span class="k">def</span> <span class="nf">get_servo</span><span class="p">(</span><span class="bp">self</span><span class="p">,</span> <span class="n">channel</span><span class="p">,</span> <span class="n">stop_min</span><span class="o">=</span><span class="n">Servo</span><span class="o">.</span><span class="n">DEFAULT_STOP_MIN</span><span class="p">,</span> <span class="n">stop_max</span><span class="o">=</span><span class="n">Servo</span><span class="o">.</span><span class="n">DEFAULT_STOP_MAX</span><span class="p">):</span>
+        <span class="sd">&quot;&quot;&quot; Factory method returning an instance of the class :py:meth:`Servo` with the given</span>
+<span class="sd">        configuration.</span>
+
+<span class="sd">        Instances are cached for optimization.</span>
+<span class="sd">        :param int channel: channel number (1-16) to which the servo is connected</span>
+<span class="sd">        :param StopSpecification stop_min: see :py:class:`Servo` constructor</span>
+<span class="sd">        :param StopSpecification stop_max: see :py:class:`Servo` constructor</span>
+<span class="sd">        :return: a Servo instance</span>
+<span class="sd">        :raise: ValueError is invalid channel number</span>
+<span class="sd">        &quot;&quot;&quot;</span>
+        <span class="k">if</span> <span class="ow">not</span> <span class="mi">1</span> <span class="o">&lt;=</span> <span class="n">channel</span> <span class="o">&lt;=</span> <span class="mi">16</span><span class="p">:</span>
+            <span class="k">raise</span> <span class="ne">ValueError</span><span class="p">(</span><span class="s">&quot;invalid channel num (</span><span class="si">%d</span><span class="s">)&quot;</span> <span class="o">%</span> <span class="n">channel</span><span class="p">)</span>
+        <span class="k">try</span><span class="p">:</span>
+            <span class="k">return</span> <span class="bp">self</span><span class="o">.</span><span class="n">_servos</span><span class="p">[</span><span class="n">channel</span><span class="p">]</span>
+        <span class="k">except</span> <span class="ne">KeyError</span><span class="p">:</span>
+            <span class="n">servo</span> <span class="o">=</span> <span class="n">Servo</span><span class="p">(</span><span class="bp">self</span><span class="p">,</span> <span class="n">channel</span><span class="p">,</span> <span class="n">stop_min</span><span class="o">=</span><span class="n">stop_min</span><span class="p">,</span> <span class="n">stop_max</span><span class="o">=</span><span class="n">stop_max</span><span class="p">)</span>
+            <span class="bp">self</span><span class="o">.</span><span class="n">_servos</span><span class="p">[</span><span class="n">channel</span><span class="p">]</span> <span class="o">=</span> <span class="n">servo</span>
+            <span class="k">return</span> <span class="n">servo</span></div></div>
+</pre></div>
+
+          </div>
+          <footer>
+  
+
+  <hr/>
+
+  <div role="contentinfo">
+    <p>
+        &copy; Copyright 2015, Eric Pascual.
+    </p>
+  </div>
+
+  Built with <a href="http://sphinx-doc.org/">Sphinx</a> using a <a href="https://github.com/snide/sphinx_rtd_theme">theme</a> provided by <a href="https://readthedocs.org">Read the Docs</a>.
+  
+</footer>
+        </div>
+      </div>
+
+    </section>
+
+  </div>
+  
+
+
+  
+
+    <script type="text/javascript">
+        var DOCUMENTATION_OPTIONS = {
+            URL_ROOT:'../../../',
+            VERSION:'1.0',
+            COLLAPSE_INDEX:false,
+            FILE_SUFFIX:'.html',
+            HAS_SOURCE:  true
+        };
+    </script>
+      <script type="text/javascript" src="../../../_static/jquery.js"></script>
+      <script type="text/javascript" src="../../../_static/underscore.js"></script>
+      <script type="text/javascript" src="../../../_static/doctools.js"></script>
+
+  
+
+  
+  
+    <script type="text/javascript" src="../../../_static/js/theme.js"></script>
+  
+
+  
+  
+  <script type="text/javascript">
+      jQuery(function () {
+          SphinxRtdTheme.StickyNav.enable();
+      });
+  </script>
+   
+
+</body>
+</html>

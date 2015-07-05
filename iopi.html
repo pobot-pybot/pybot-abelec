@@ -102,8 +102,475 @@
 </div>
           <div role="main" class="document">
             
-  <div class="section" id="pybot-abelec-iopi-module">
-<h1><code class="docutils literal"><span class="pre">pybot_abelec.iopi</span></code> module<a class="headerlink" href="#pybot-abelec-iopi-module" title="Permalink to this headline">¶</a></h1>
+  <div class="section" id="module-pybot.abelec.iopi">
+<span id="pybot-abelec-iopi-module"></span><h1><code class="docutils literal"><span class="pre">pybot_abelec.iopi</span></code> module<a class="headerlink" href="#module-pybot.abelec.iopi" title="Permalink to this headline">¶</a></h1>
+<p>A set of simple classes for interacting with the IOPi board from AB Electronics
+(<a class="reference external" href="https://www.abelectronics.co.uk/products/3/Raspberry-Pi/18/IO-Pi">https://www.abelectronics.co.uk/products/3/Raspberry-Pi/18/IO-Pi</a>).</p>
+<p>At the end of the chain is the individual IO, provided by the classes <a class="reference internal" href="#pybot.abelec.iopi.DigitalInput" title="pybot.abelec.iopi.DigitalInput"><code class="xref py py-class docutils literal"><span class="pre">DigitalInput</span></code></a>
+and <a class="reference internal" href="#pybot.abelec.iopi.DigitalOutput" title="pybot.abelec.iopi.DigitalOutput"><code class="xref py py-class docutils literal"><span class="pre">DigitalOutput</span></code></a> (they will ease the transition for Arduino fans ;). IO instances
+are attached to a <a class="reference internal" href="#pybot.abelec.iopi.Port" title="pybot.abelec.iopi.Port"><code class="xref py py-class docutils literal"><span class="pre">Port</span></code></a>, modeling a real MCP23017 port. Ports are themselves attached to a
+<code class="xref py py-class docutils literal"><span class="pre">MCP23017</span></code>, which is itself attached to a <a class="reference internal" href="#pybot.abelec.iopi.IOPiBoard" title="pybot.abelec.iopi.IOPiBoard"><code class="xref py py-class docutils literal"><span class="pre">IOPiBoard</span></code></a>.</p>
+<p>All these intricacies such as bit masking on register values and alike are hidden from the user,
+and a lot of things are optimized by caching instances and data for avoiding paying too high a price
+for a high level design. Even if the added overhead could seem penalizing in term of performances,
+this is not that obvious, since all the processing done here must be done somewhere anyway. There
+are thus chances that the effective penalty (if ever any) will be negligible for most of the
+applications.</p>
+<p>To allow several classes instances being used for modeling a configuration with multiple boards,
+possibly of different types, the underlying bus must be created outside and provided as a dependency
+(see documentation about de &#8220;Dependency Injection&#8221; design pattern). Being able to provide whatever
+implementation of the basic read and write operations allows the use of a fake class simulating
+real operations, which made possible to test the rest of the application on a system not having
+a SMBus resource available, such as the development station PC for instance, or providing access to
+an I2C bus using an USB adapter for instance. For examples of this, have a look at our i2c module
+(<a class="reference external" href="https://github.com/Pobot/PyBot/blob/master/pybot/i2c.py">https://github.com/Pobot/PyBot/blob/master/pybot/i2c.py</a>). We have included there an enhanced smbus
+class (<code class="xref py py-class docutils literal"><span class="pre">pybot.i2c.SMBusI2CBus</span></code>), taking care of serializing I/O operations, in case of
+multi-threaded usage.</p>
+<p>Here is an example of the code used for controlling a LED connected to pin 3 of IC_1 expander
+header. We suppose that the LED is wired in positive logic, i.e. lightened when the IO is high.</p>
+<div class="highlight-python"><div class="highlight"><pre><span class="gp">&gt;&gt;&gt; </span><span class="kn">from</span> <span class="nn">pybot.raspi</span> <span class="kn">import</span> <span class="n">i2c_bus</span>
+<span class="gp">&gt;&gt;&gt; </span><span class="kn">from</span> <span class="nn">pybot.abelec.iopi</span> <span class="kn">import</span> <span class="n">IOPiBoard</span>
+<span class="gp">&gt;&gt;&gt; </span><span class="o">...</span>
+<span class="gp">&gt;&gt;&gt; </span><span class="c"># create an instance of the board</span>
+<span class="gp">&gt;&gt;&gt; </span><span class="n">board</span> <span class="o">=</span> <span class="n">IOPiBoard</span><span class="p">(</span><span class="n">i2c_bus</span><span class="p">)</span>
+<span class="gp">&gt;&gt;&gt; </span><span class="c"># define an output IO corresponding to the one connected to the LED</span>
+<span class="gp">&gt;&gt;&gt; </span><span class="n">led</span> <span class="o">=</span> <span class="n">board</span><span class="o">.</span><span class="n">get_digital_output</span><span class="p">(</span><span class="n">board</span><span class="o">.</span><span class="n">EXPANDER_1</span><span class="p">,</span> <span class="mi">3</span><span class="p">)</span>
+<span class="gp">&gt;&gt;&gt; </span><span class="o">...</span>
+<span class="gp">&gt;&gt;&gt; </span><span class="c"># switch the LED on by setting the IO in high state</span>
+<span class="gp">&gt;&gt;&gt; </span><span class="n">led</span><span class="o">.</span><span class="n">set</span><span class="p">()</span>
+<span class="gp">&gt;&gt;&gt; </span><span class="o">...</span>
+<span class="gp">&gt;&gt;&gt; </span><span class="c"># switch the LED off by setting the IO in low state</span>
+<span class="gp">&gt;&gt;&gt; </span><span class="n">led</span><span class="o">.</span><span class="n">clear</span><span class="p">()</span>
+</pre></div>
+</div>
+<p>Here is another example for reading an input, f.i. a switch connected on pin 11.</p>
+<div class="highlight-python"><div class="highlight"><pre><span class="gp">&gt;&gt;&gt; </span><span class="n">board</span> <span class="o">=</span> <span class="n">IOPiBoard</span><span class="p">(</span><span class="n">i2c_bus</span><span class="p">)</span>
+<span class="gp">&gt;&gt;&gt; </span><span class="n">switch</span> <span class="o">=</span> <span class="n">board</span><span class="o">.</span><span class="n">get_digital_input</span><span class="p">(</span><span class="n">board</span><span class="o">.</span><span class="n">EXPANDER_1</span><span class="p">,</span> <span class="mi">11</span><span class="p">,</span> <span class="n">pullup_enabled</span><span class="o">=</span><span class="bp">True</span>
+<span class="gp">&gt;&gt;&gt; </span><span class="o">...</span>
+<span class="gp">&gt;&gt;&gt; </span><span class="c"># read the state of the switch</span>
+<span class="gp">&gt;&gt;&gt; </span><span class="k">if</span> <span class="n">switch</span><span class="o">.</span><span class="n">is_set</span><span class="p">():</span>
+<span class="gp">&gt;&gt;&gt; </span><span class="o">...</span>
+</pre></div>
+</div>
+<p>Pretty simple, no ?</p>
+<dl class="class">
+<dt id="pybot.abelec.iopi.DigitalInput">
+<em class="property">class </em><code class="descclassname">pybot.abelec.iopi.</code><code class="descname">DigitalInput</code><span class="sig-paren">(</span><em>port</em>, <em>num</em>, <em>pullup_enabled=False</em><span class="sig-paren">)</span><a class="reference internal" href="_modules/pybot/abelec/iopi.html#DigitalInput"><span class="viewcode-link">[source]</span></a><a class="headerlink" href="#pybot.abelec.iopi.DigitalInput" title="Permalink to this definition">¶</a></dt>
+<dd><p>Bases: <a class="reference internal" href="#pybot.abelec.iopi.IO" title="pybot.abelec.iopi.IO"><code class="xref py py-class docutils literal"><span class="pre">pybot.abelec.iopi.IO</span></code></a>, <code class="xref py py-class docutils literal"><span class="pre">pybot.abelec.iopi._ReadableIOMixin</span></code></p>
+<p>A specialized IO modeling an input.</p>
+<dl class="method">
+<dt id="pybot.abelec.iopi.DigitalInput.__init__">
+<code class="descname">__init__</code><span class="sig-paren">(</span><em>port</em>, <em>num</em>, <em>pullup_enabled=False</em><span class="sig-paren">)</span><a class="reference internal" href="_modules/pybot/abelec/iopi.html#DigitalInput.__init__"><span class="viewcode-link">[source]</span></a><a class="headerlink" href="#pybot.abelec.iopi.DigitalInput.__init__" title="Permalink to this definition">¶</a></dt>
+<dd><table class="docutils field-list" frame="void" rules="none">
+<col class="field-name" />
+<col class="field-body" />
+<tbody valign="top">
+<tr class="field-odd field"><th class="field-name">Parameters:</th><td class="field-body"><ul class="first last simple">
+<li><strong>port</strong> (<a class="reference internal" href="#pybot.abelec.iopi.Port" title="pybot.abelec.iopi.Port"><em>Port</em></a>) &#8211; the port this IO belongs to</li>
+<li><strong>num</strong> (<a class="reference external" href="https://docs.python.org/library/functions.html#int" title="(in Python v2.7)"><em>int</em></a>) &#8211; the IO number ([0-7])</li>
+<li><strong>pullup_enabled</strong> (<a class="reference external" href="https://docs.python.org/library/functions.html#bool" title="(in Python v2.7)"><em>bool</em></a>) &#8211; should the pullup be enabled ?</li>
+</ul>
+</td>
+</tr>
+</tbody>
+</table>
+</dd></dl>
+
+</dd></dl>
+
+<dl class="class">
+<dt id="pybot.abelec.iopi.DigitalOutput">
+<em class="property">class </em><code class="descclassname">pybot.abelec.iopi.</code><code class="descname">DigitalOutput</code><span class="sig-paren">(</span><em>port</em>, <em>num</em><span class="sig-paren">)</span><a class="reference internal" href="_modules/pybot/abelec/iopi.html#DigitalOutput"><span class="viewcode-link">[source]</span></a><a class="headerlink" href="#pybot.abelec.iopi.DigitalOutput" title="Permalink to this definition">¶</a></dt>
+<dd><p>Bases: <a class="reference internal" href="#pybot.abelec.iopi.IO" title="pybot.abelec.iopi.IO"><code class="xref py py-class docutils literal"><span class="pre">pybot.abelec.iopi.IO</span></code></a>, <code class="xref py py-class docutils literal"><span class="pre">pybot.abelec.iopi._ReadableIOMixin</span></code></p>
+<p>A specialized IO modeling an output.</p>
+<dl class="method">
+<dt id="pybot.abelec.iopi.DigitalOutput.__init__">
+<code class="descname">__init__</code><span class="sig-paren">(</span><em>port</em>, <em>num</em><span class="sig-paren">)</span><a class="reference internal" href="_modules/pybot/abelec/iopi.html#DigitalOutput.__init__"><span class="viewcode-link">[source]</span></a><a class="headerlink" href="#pybot.abelec.iopi.DigitalOutput.__init__" title="Permalink to this definition">¶</a></dt>
+<dd><table class="docutils field-list" frame="void" rules="none">
+<col class="field-name" />
+<col class="field-body" />
+<tbody valign="top">
+<tr class="field-odd field"><th class="field-name">Parameters:</th><td class="field-body"><ul class="first last simple">
+<li><strong>port</strong> (<a class="reference internal" href="#pybot.abelec.iopi.Port" title="pybot.abelec.iopi.Port"><em>Port</em></a>) &#8211; the port this IO belongs to</li>
+<li><strong>num</strong> (<a class="reference external" href="https://docs.python.org/library/functions.html#int" title="(in Python v2.7)"><em>int</em></a>) &#8211; the IO number ([0-7])</li>
+</ul>
+</td>
+</tr>
+</tbody>
+</table>
+</dd></dl>
+
+<dl class="method">
+<dt id="pybot.abelec.iopi.DigitalOutput.clear">
+<code class="descname">clear</code><span class="sig-paren">(</span><span class="sig-paren">)</span><a class="reference internal" href="_modules/pybot/abelec/iopi.html#DigitalOutput.clear"><span class="viewcode-link">[source]</span></a><a class="headerlink" href="#pybot.abelec.iopi.DigitalOutput.clear" title="Permalink to this definition">¶</a></dt>
+<dd><p>Turns the output low.</p>
+</dd></dl>
+
+<dl class="method">
+<dt id="pybot.abelec.iopi.DigitalOutput.set">
+<code class="descname">set</code><span class="sig-paren">(</span><span class="sig-paren">)</span><a class="reference internal" href="_modules/pybot/abelec/iopi.html#DigitalOutput.set"><span class="viewcode-link">[source]</span></a><a class="headerlink" href="#pybot.abelec.iopi.DigitalOutput.set" title="Permalink to this definition">¶</a></dt>
+<dd><p>Turns the output high.</p>
+</dd></dl>
+
+</dd></dl>
+
+<dl class="class">
+<dt id="pybot.abelec.iopi.Expander">
+<em class="property">class </em><code class="descclassname">pybot.abelec.iopi.</code><code class="descname">Expander</code><span class="sig-paren">(</span><em>bus</em>, <em>i2c_addr</em><span class="sig-paren">)</span><a class="reference internal" href="_modules/pybot/abelec/iopi.html#Expander"><span class="viewcode-link">[source]</span></a><a class="headerlink" href="#pybot.abelec.iopi.Expander" title="Permalink to this definition">¶</a></dt>
+<dd><p>Bases: <a class="reference external" href="https://docs.python.org/library/functions.html#object" title="(in Python v2.7)"><code class="xref py py-class docutils literal"><span class="pre">object</span></code></a></p>
+<p>Models the MCP23017 expander chip, and handles its low level operations.</p>
+<p>This class aggregates the two ports included in the chip.</p>
+<dl class="method">
+<dt id="pybot.abelec.iopi.Expander.__init__">
+<code class="descname">__init__</code><span class="sig-paren">(</span><em>bus</em>, <em>i2c_addr</em><span class="sig-paren">)</span><a class="reference internal" href="_modules/pybot/abelec/iopi.html#Expander.__init__"><span class="viewcode-link">[source]</span></a><a class="headerlink" href="#pybot.abelec.iopi.Expander.__init__" title="Permalink to this definition">¶</a></dt>
+<dd><table class="docutils field-list" frame="void" rules="none">
+<col class="field-name" />
+<col class="field-body" />
+<tbody valign="top">
+<tr class="field-odd field"><th class="field-name">Parameters:</th><td class="field-body"><ul class="first last simple">
+<li><strong>bus</strong> &#8211; the I2C/SMBus instance</li>
+<li><strong>i2c_addr</strong> (<a class="reference external" href="https://docs.python.org/library/functions.html#int" title="(in Python v2.7)"><em>int</em></a>) &#8211; expander I2C address</li>
+</ul>
+</td>
+</tr>
+</tbody>
+</table>
+</dd></dl>
+
+<dl class="method">
+<dt id="pybot.abelec.iopi.Expander.read">
+<code class="descname">read</code><span class="sig-paren">(</span><span class="sig-paren">)</span><a class="reference internal" href="_modules/pybot/abelec/iopi.html#Expander.read"><span class="viewcode-link">[source]</span></a><a class="headerlink" href="#pybot.abelec.iopi.Expander.read" title="Permalink to this definition">¶</a></dt>
+<dd><p>Reads both expander ports and return their values as a 16 bits integer.</p>
+<table class="docutils field-list" frame="void" rules="none">
+<col class="field-name" />
+<col class="field-body" />
+<tbody valign="top">
+<tr class="field-odd field"><th class="field-name">Returns:</th><td class="field-body">2 bytes integer with PORTB and PORTA values as respectively MSB and LSB</td>
+</tr>
+<tr class="field-even field"><th class="field-name">Return type:</th><td class="field-body"><a class="reference external" href="https://docs.python.org/library/functions.html#int" title="(in Python v2.7)">int</a></td>
+</tr>
+</tbody>
+</table>
+</dd></dl>
+
+<dl class="method">
+<dt id="pybot.abelec.iopi.Expander.read_register">
+<code class="descname">read_register</code><span class="sig-paren">(</span><em>addr</em><span class="sig-paren">)</span><a class="reference internal" href="_modules/pybot/abelec/iopi.html#Expander.read_register"><span class="viewcode-link">[source]</span></a><a class="headerlink" href="#pybot.abelec.iopi.Expander.read_register" title="Permalink to this definition">¶</a></dt>
+<dd><p>Reads a chip register.
+:param int addr: register address
+:return: register content
+:rtype: int</p>
+</dd></dl>
+
+<dl class="method">
+<dt id="pybot.abelec.iopi.Expander.reset">
+<code class="descname">reset</code><span class="sig-paren">(</span><span class="sig-paren">)</span><a class="reference internal" href="_modules/pybot/abelec/iopi.html#Expander.reset"><span class="viewcode-link">[source]</span></a><a class="headerlink" href="#pybot.abelec.iopi.Expander.reset" title="Permalink to this definition">¶</a></dt>
+<dd><p>Resets both ports</p>
+</dd></dl>
+
+<dl class="method">
+<dt id="pybot.abelec.iopi.Expander.write_register">
+<code class="descname">write_register</code><span class="sig-paren">(</span><em>reg</em>, <em>data</em><span class="sig-paren">)</span><a class="reference internal" href="_modules/pybot/abelec/iopi.html#Expander.write_register"><span class="viewcode-link">[source]</span></a><a class="headerlink" href="#pybot.abelec.iopi.Expander.write_register" title="Permalink to this definition">¶</a></dt>
+<dd><p>Writes a chip register.</p>
+<p>Since the method takes care of clamping the passed value to a byte
+extent, it also returns the clamped value for convenience.</p>
+<table class="docutils field-list" frame="void" rules="none">
+<col class="field-name" />
+<col class="field-body" />
+<tbody valign="top">
+<tr class="field-odd field"><th class="field-name">Parameters:</th><td class="field-body"><ul class="first simple">
+<li><strong>reg</strong> (<a class="reference external" href="https://docs.python.org/library/functions.html#int" title="(in Python v2.7)"><em>int</em></a>) &#8211; register address</li>
+<li><strong>data</strong> (<a class="reference external" href="https://docs.python.org/library/functions.html#int" title="(in Python v2.7)"><em>int</em></a>) &#8211; register value</li>
+</ul>
+</td>
+</tr>
+<tr class="field-even field"><th class="field-name">Returns:</th><td class="field-body"><p class="first">the written data</p>
+</td>
+</tr>
+<tr class="field-odd field"><th class="field-name">Return type:</th><td class="field-body"><p class="first last"><a class="reference external" href="https://docs.python.org/library/functions.html#int" title="(in Python v2.7)">int</a></p>
+</td>
+</tr>
+</tbody>
+</table>
+</dd></dl>
+
+</dd></dl>
+
+<dl class="class">
+<dt id="pybot.abelec.iopi.IO">
+<em class="property">class </em><code class="descclassname">pybot.abelec.iopi.</code><code class="descname">IO</code><span class="sig-paren">(</span><em>port</em>, <em>num</em>, <em>is_input</em><span class="sig-paren">)</span><a class="reference internal" href="_modules/pybot/abelec/iopi.html#IO"><span class="viewcode-link">[source]</span></a><a class="headerlink" href="#pybot.abelec.iopi.IO" title="Permalink to this definition">¶</a></dt>
+<dd><p>Bases: <a class="reference external" href="https://docs.python.org/library/functions.html#object" title="(in Python v2.7)"><code class="xref py py-class docutils literal"><span class="pre">object</span></code></a></p>
+<p>Root class for modeling a single IO or a port.</p>
+<dl class="method">
+<dt id="pybot.abelec.iopi.IO.__init__">
+<code class="descname">__init__</code><span class="sig-paren">(</span><em>port</em>, <em>num</em>, <em>is_input</em><span class="sig-paren">)</span><a class="reference internal" href="_modules/pybot/abelec/iopi.html#IO.__init__"><span class="viewcode-link">[source]</span></a><a class="headerlink" href="#pybot.abelec.iopi.IO.__init__" title="Permalink to this definition">¶</a></dt>
+<dd><table class="docutils field-list" frame="void" rules="none">
+<col class="field-name" />
+<col class="field-body" />
+<tbody valign="top">
+<tr class="field-odd field"><th class="field-name">Parameters:</th><td class="field-body"><ul class="first last simple">
+<li><strong>port</strong> (<a class="reference internal" href="#pybot.abelec.iopi.Port" title="pybot.abelec.iopi.Port"><em>Port</em></a>) &#8211; the port the IO is attached to</li>
+<li><strong>num</strong> (<a class="reference external" href="https://docs.python.org/library/functions.html#int" title="(in Python v2.7)"><em>int</em></a>) &#8211; IO num ([0-7])</li>
+<li><strong>is_input</strong> (<a class="reference external" href="https://docs.python.org/library/functions.html#bool" title="(in Python v2.7)"><em>bool</em></a>) &#8211; is an input or not ?</li>
+</ul>
+</td>
+</tr>
+</tbody>
+</table>
+</dd></dl>
+
+<dl class="attribute">
+<dt id="pybot.abelec.iopi.IO.mask">
+<code class="descname">mask</code><a class="headerlink" href="#pybot.abelec.iopi.IO.mask" title="Permalink to this definition">¶</a></dt>
+<dd><p>The bit mask of this IO.</p>
+<p>It can be useful for manipulating IOs with port single read/write
+for optimizing access.</p>
+</dd></dl>
+
+<dl class="attribute">
+<dt id="pybot.abelec.iopi.IO.port">
+<code class="descname">port</code><a class="headerlink" href="#pybot.abelec.iopi.IO.port" title="Permalink to this definition">¶</a></dt>
+<dd><p>The port this IO belongs to.</p>
+</dd></dl>
+
+</dd></dl>
+
+<dl class="class">
+<dt id="pybot.abelec.iopi.IOPiBoard">
+<em class="property">class </em><code class="descclassname">pybot.abelec.iopi.</code><code class="descname">IOPiBoard</code><span class="sig-paren">(</span><em>bus</em>, <em>exp1_addr=32</em>, <em>exp2_addr=33</em><span class="sig-paren">)</span><a class="reference internal" href="_modules/pybot/abelec/iopi.html#IOPiBoard"><span class="viewcode-link">[source]</span></a><a class="headerlink" href="#pybot.abelec.iopi.IOPiBoard" title="Permalink to this definition">¶</a></dt>
+<dd><p>Bases: <a class="reference external" href="https://docs.python.org/library/functions.html#object" title="(in Python v2.7)"><code class="xref py py-class docutils literal"><span class="pre">object</span></code></a></p>
+<p>This class represents a whole IOPi expansion board.</p>
+<p>Its main role is to act as a factory for individual IOs, so that the application
+will not deal with bit masking and other boring chores.</p>
+<p>It can be used directly to manipulate the registers of the 4 embedded I/O ports,
+but usually it&#8217;s simpler to use instances of the Port class for this. This is
+fully equivalent, but user code is more readable this way.</p>
+<p>This costs a small overhead since the Port methods delegates to Board ones, taking
+care of passing them the additional parameters, but unless you have a critical
+performances problem, it should do the trick most of the time.</p>
+<dl class="method">
+<dt id="pybot.abelec.iopi.IOPiBoard.__init__">
+<code class="descname">__init__</code><span class="sig-paren">(</span><em>bus</em>, <em>exp1_addr=32</em>, <em>exp2_addr=33</em><span class="sig-paren">)</span><a class="reference internal" href="_modules/pybot/abelec/iopi.html#IOPiBoard.__init__"><span class="viewcode-link">[source]</span></a><a class="headerlink" href="#pybot.abelec.iopi.IOPiBoard.__init__" title="Permalink to this definition">¶</a></dt>
+<dd><p>An instance of the I2C/SMBus class must be provided here. The calls used in the
+classes of this module are based on the smbus.SMBus interface. Any implementation providing
+the same API can thus be used, including fake ones for testing.</p>
+<table class="docutils field-list" frame="void" rules="none">
+<col class="field-name" />
+<col class="field-body" />
+<tbody valign="top">
+<tr class="field-odd field"><th class="field-name">Parameters:</th><td class="field-body"><ul class="first last simple">
+<li><strong>bus</strong> &#8211; the I2C/SMBus instance</li>
+<li><strong>exp1_addr</strong> (<a class="reference external" href="https://docs.python.org/library/functions.html#int" title="(in Python v2.7)"><em>int</em></a>) &#8211; I2C address of expander 1</li>
+<li><strong>exp2_addr</strong> (<a class="reference external" href="https://docs.python.org/library/functions.html#int" title="(in Python v2.7)"><em>int</em></a>) &#8211; I2C address of expander 1</li>
+</ul>
+</td>
+</tr>
+</tbody>
+</table>
+</dd></dl>
+
+<dl class="method">
+<dt id="pybot.abelec.iopi.IOPiBoard.get_digital_input">
+<code class="descname">get_digital_input</code><span class="sig-paren">(</span><em>expander_num</em>, <em>board_io_num</em>, <em>pullup_enabled=False</em><span class="sig-paren">)</span><a class="reference internal" href="_modules/pybot/abelec/iopi.html#IOPiBoard.get_digital_input"><span class="viewcode-link">[source]</span></a><a class="headerlink" href="#pybot.abelec.iopi.IOPiBoard.get_digital_input" title="Permalink to this definition">¶</a></dt>
+<dd><p>Factory method returning a DigitalInput instance for a given IO, and configures
+it as requested.
+:param int expander_num: IOPiBoard.EXPANDER_1 or IOPiBoard.EXPANDER_2
+:param int board_io_num: the pin number of the IO on the expander header
+:param pullup_enabled: should the internal pull-up be enabled or not
+:return: the IO object
+:rtype: DigitalInput</p>
+</dd></dl>
+
+<dl class="method">
+<dt id="pybot.abelec.iopi.IOPiBoard.get_digital_output">
+<code class="descname">get_digital_output</code><span class="sig-paren">(</span><em>expander_num</em>, <em>board_io_num</em><span class="sig-paren">)</span><a class="reference internal" href="_modules/pybot/abelec/iopi.html#IOPiBoard.get_digital_output"><span class="viewcode-link">[source]</span></a><a class="headerlink" href="#pybot.abelec.iopi.IOPiBoard.get_digital_output" title="Permalink to this definition">¶</a></dt>
+<dd><p>Factory method returning a DigitalOutput instance for a given IO.
+:param int expander_num: IOPiBoard.EXPANDER_1 or IOPiBoard.EXPANDER_2
+:param int board_io_num: the pin number of the IO on the expander header
+:return: the IO object
+:rtype: DigitalOutput</p>
+</dd></dl>
+
+<dl class="method">
+<dt id="pybot.abelec.iopi.IOPiBoard.read">
+<code class="descname">read</code><span class="sig-paren">(</span><span class="sig-paren">)</span><a class="reference internal" href="_modules/pybot/abelec/iopi.html#IOPiBoard.read"><span class="viewcode-link">[source]</span></a><a class="headerlink" href="#pybot.abelec.iopi.IOPiBoard.read" title="Permalink to this definition">¶</a></dt>
+<dd><p>Reads all ports of all expanders and returns their values as a single 32 bits integer.</p>
+<dl class="docutils">
+<dt>The returned integer is built as follows:</dt>
+<dd>MSB1 = expander_2.port_B
+LSB1 = expander_2.port_A
+MSB0 = expander_1.port_B
+LSB0 = expander_1.port_A</dd>
+</dl>
+<table class="docutils field-list" frame="void" rules="none">
+<col class="field-name" />
+<col class="field-body" />
+<tbody valign="top">
+<tr class="field-odd field"><th class="field-name">Returns:</th><td class="field-body">all board ports content</td>
+</tr>
+</tbody>
+</table>
+</dd></dl>
+
+<dl class="method">
+<dt id="pybot.abelec.iopi.IOPiBoard.reset">
+<code class="descname">reset</code><span class="sig-paren">(</span><span class="sig-paren">)</span><a class="reference internal" href="_modules/pybot/abelec/iopi.html#IOPiBoard.reset"><span class="viewcode-link">[source]</span></a><a class="headerlink" href="#pybot.abelec.iopi.IOPiBoard.reset" title="Permalink to this definition">¶</a></dt>
+<dd><p>Resets both expanders of the board</p>
+</dd></dl>
+
+</dd></dl>
+
+<dl class="class">
+<dt id="pybot.abelec.iopi.Port">
+<em class="property">class </em><code class="descclassname">pybot.abelec.iopi.</code><code class="descname">Port</code><span class="sig-paren">(</span><em>expander</em>, <em>port_num</em><span class="sig-paren">)</span><a class="reference internal" href="_modules/pybot/abelec/iopi.html#Port"><span class="viewcode-link">[source]</span></a><a class="headerlink" href="#pybot.abelec.iopi.Port" title="Permalink to this definition">¶</a></dt>
+<dd><p>Bases: <a class="reference external" href="https://docs.python.org/library/functions.html#object" title="(in Python v2.7)"><code class="xref py py-class docutils literal"><span class="pre">object</span></code></a></p>
+<p>Model of an IO port of an expander.</p>
+<p>Implements a caching mechanism for non volatile registers, so that modification
+operations are optimized by removing the need for physically reading the registers
+content.</p>
+<dl class="method">
+<dt id="pybot.abelec.iopi.Port.__init__">
+<code class="descname">__init__</code><span class="sig-paren">(</span><em>expander</em>, <em>port_num</em><span class="sig-paren">)</span><a class="reference internal" href="_modules/pybot/abelec/iopi.html#Port.__init__"><span class="viewcode-link">[source]</span></a><a class="headerlink" href="#pybot.abelec.iopi.Port.__init__" title="Permalink to this definition">¶</a></dt>
+<dd><table class="docutils field-list" frame="void" rules="none">
+<col class="field-name" />
+<col class="field-body" />
+<tbody valign="top">
+<tr class="field-odd field"><th class="field-name">Parameters:</th><td class="field-body"><ul class="first last simple">
+<li><strong>expander</strong> (<a class="reference internal" href="#pybot.abelec.iopi.Expander" title="pybot.abelec.iopi.Expander"><em>Expander</em></a>) &#8211; Expander instance this port belongs to</li>
+<li><strong>port_num</strong> (<a class="reference external" href="https://docs.python.org/library/functions.html#int" title="(in Python v2.7)"><em>int</em></a>) &#8211; the port num (Expander.PORT_A or Expander.PORT_B).</li>
+</ul>
+</td>
+</tr>
+</tbody>
+</table>
+</dd></dl>
+
+<dl class="attribute">
+<dt id="pybot.abelec.iopi.Port.default_values">
+<code class="descname">default_values</code><a class="headerlink" href="#pybot.abelec.iopi.Port.default_values" title="Permalink to this definition">¶</a></dt>
+<dd><p>Returns the current settings of the port interrupt default values.</p>
+</dd></dl>
+
+<dl class="method">
+<dt id="pybot.abelec.iopi.Port.dump">
+<code class="descname">dump</code><span class="sig-paren">(</span><span class="sig-paren">)</span><a class="reference internal" href="_modules/pybot/abelec/iopi.html#Port.dump"><span class="viewcode-link">[source]</span></a><a class="headerlink" href="#pybot.abelec.iopi.Port.dump" title="Permalink to this definition">¶</a></dt>
+<dd><p>Internal method for debugging.</p>
+</dd></dl>
+
+<dl class="method">
+<dt id="pybot.abelec.iopi.Port.enable_interrupt">
+<code class="descname">enable_interrupt</code><span class="sig-paren">(</span><em>io_num</em>, <em>enabled</em><span class="sig-paren">)</span><a class="reference internal" href="_modules/pybot/abelec/iopi.html#Port.enable_interrupt"><span class="viewcode-link">[source]</span></a><a class="headerlink" href="#pybot.abelec.iopi.Port.enable_interrupt" title="Permalink to this definition">¶</a></dt>
+<dd><p>Enables interrupts for a given input.
+:param int io_num: the IO num ([0-7])
+:param bool enabled: is interrupt enabled ?
+:raise: ValueError if out of range io_num</p>
+</dd></dl>
+
+<dl class="method">
+<dt id="pybot.abelec.iopi.Port.enable_pullup">
+<code class="descname">enable_pullup</code><span class="sig-paren">(</span><em>io_num</em>, <em>enabled</em><span class="sig-paren">)</span><a class="reference internal" href="_modules/pybot/abelec/iopi.html#Port.enable_pullup"><span class="viewcode-link">[source]</span></a><a class="headerlink" href="#pybot.abelec.iopi.Port.enable_pullup" title="Permalink to this definition">¶</a></dt>
+<dd><p>Configures a single input pullup.
+:param int io_num: the IO num ([0-7])
+:param bool enabled: is the pullup enabled ?
+:raise: ValueError if out of range io_num</p>
+</dd></dl>
+
+<dl class="attribute">
+<dt id="pybot.abelec.iopi.Port.inputs_inverted">
+<code class="descname">inputs_inverted</code><a class="headerlink" href="#pybot.abelec.iopi.Port.inputs_inverted" title="Permalink to this definition">¶</a></dt>
+<dd><p>Returns the current settings of the port inputs polarity inversion.</p>
+</dd></dl>
+
+<dl class="attribute">
+<dt id="pybot.abelec.iopi.Port.interrupt_sources">
+<code class="descname">interrupt_sources</code><a class="headerlink" href="#pybot.abelec.iopi.Port.interrupt_sources" title="Permalink to this definition">¶</a></dt>
+<dd><p>Returns the current settings of the port interrupt compare sources.</p>
+</dd></dl>
+
+<dl class="attribute">
+<dt id="pybot.abelec.iopi.Port.interrupts_enabled">
+<code class="descname">interrupts_enabled</code><a class="headerlink" href="#pybot.abelec.iopi.Port.interrupts_enabled" title="Permalink to this definition">¶</a></dt>
+<dd><p>Returns the current settings of the port inputs interrupts enabling.</p>
+</dd></dl>
+
+<dl class="method">
+<dt id="pybot.abelec.iopi.Port.invert_input">
+<code class="descname">invert_input</code><span class="sig-paren">(</span><em>io_num</em>, <em>inverted</em><span class="sig-paren">)</span><a class="reference internal" href="_modules/pybot/abelec/iopi.html#Port.invert_input"><span class="viewcode-link">[source]</span></a><a class="headerlink" href="#pybot.abelec.iopi.Port.invert_input" title="Permalink to this definition">¶</a></dt>
+<dd><p>Configures the inversion of a given input.
+:param int io_num: the IO num ([0-7])
+:param bool inverted: is the input inverted ?
+:raise: ValueError if out of range io_num</p>
+</dd></dl>
+
+<dl class="attribute">
+<dt id="pybot.abelec.iopi.Port.io_directions">
+<code class="descname">io_directions</code><a class="headerlink" href="#pybot.abelec.iopi.Port.io_directions" title="Permalink to this definition">¶</a></dt>
+<dd><p>Returns the current settings of the port IO directions.</p>
+</dd></dl>
+
+<dl class="attribute">
+<dt id="pybot.abelec.iopi.Port.pullups_enabled">
+<code class="descname">pullups_enabled</code><a class="headerlink" href="#pybot.abelec.iopi.Port.pullups_enabled" title="Permalink to this definition">¶</a></dt>
+<dd><p>Returns the current settings of the port inputs pullups.</p>
+</dd></dl>
+
+<dl class="method">
+<dt id="pybot.abelec.iopi.Port.read">
+<code class="descname">read</code><span class="sig-paren">(</span><span class="sig-paren">)</span><a class="reference internal" href="_modules/pybot/abelec/iopi.html#Port.read"><span class="viewcode-link">[source]</span></a><a class="headerlink" href="#pybot.abelec.iopi.Port.read" title="Permalink to this definition">¶</a></dt>
+<dd><p>Reads the port.
+:return: the port content</p>
+</dd></dl>
+
+<dl class="method">
+<dt id="pybot.abelec.iopi.Port.reset">
+<code class="descname">reset</code><span class="sig-paren">(</span><span class="sig-paren">)</span><a class="reference internal" href="_modules/pybot/abelec/iopi.html#Port.reset"><span class="viewcode-link">[source]</span></a><a class="headerlink" href="#pybot.abelec.iopi.Port.reset" title="Permalink to this definition">¶</a></dt>
+<dd><p>Puts the port in default POR state</p>
+</dd></dl>
+
+<dl class="method">
+<dt id="pybot.abelec.iopi.Port.set_default_value">
+<code class="descname">set_default_value</code><span class="sig-paren">(</span><em>io_num</em>, <em>value</em><span class="sig-paren">)</span><a class="reference internal" href="_modules/pybot/abelec/iopi.html#Port.set_default_value"><span class="viewcode-link">[source]</span></a><a class="headerlink" href="#pybot.abelec.iopi.Port.set_default_value" title="Permalink to this definition">¶</a></dt>
+<dd><p>Sets the input change default value for a given input.
+:param int io_num: the IO num ([0-7])
+:param int value: default value (0 or 1)
+:raise: ValueError if out of range io_num</p>
+</dd></dl>
+
+<dl class="method">
+<dt id="pybot.abelec.iopi.Port.set_interrupt_source">
+<code class="descname">set_interrupt_source</code><span class="sig-paren">(</span><em>io_num</em>, <em>source</em><span class="sig-paren">)</span><a class="reference internal" href="_modules/pybot/abelec/iopi.html#Port.set_interrupt_source"><span class="viewcode-link">[source]</span></a><a class="headerlink" href="#pybot.abelec.iopi.Port.set_interrupt_source" title="Permalink to this definition">¶</a></dt>
+<dd><p>Sets the compare source for input interrupts for a given input.
+:param int io_num: the IO num ([0-7])
+:param int source: IO.INT_COMPARE or IO.INT_CHANGE
+:raise: ValueError if out of range io_num</p>
+</dd></dl>
+
+<dl class="method">
+<dt id="pybot.abelec.iopi.Port.set_io_direction">
+<code class="descname">set_io_direction</code><span class="sig-paren">(</span><em>io_num</em>, <em>direction</em><span class="sig-paren">)</span><a class="reference internal" href="_modules/pybot/abelec/iopi.html#Port.set_io_direction"><span class="viewcode-link">[source]</span></a><a class="headerlink" href="#pybot.abelec.iopi.Port.set_io_direction" title="Permalink to this definition">¶</a></dt>
+<dd><p>Sets the direction of a single IO
+:param int io_num: the IO num ([0-7])
+:param int direction: IO.DIR_INPUT or IO.DIR_INPUT
+:raise: ValueError if out of range io_num</p>
+</dd></dl>
+
+<dl class="method">
+<dt id="pybot.abelec.iopi.Port.update_cache">
+<code class="descname">update_cache</code><span class="sig-paren">(</span><span class="sig-paren">)</span><a class="reference internal" href="_modules/pybot/abelec/iopi.html#Port.update_cache"><span class="viewcode-link">[source]</span></a><a class="headerlink" href="#pybot.abelec.iopi.Port.update_cache" title="Permalink to this definition">¶</a></dt>
+<dd><p>Updates the registers cache.</p>
+</dd></dl>
+
+<dl class="method">
+<dt id="pybot.abelec.iopi.Port.write">
+<code class="descname">write</code><span class="sig-paren">(</span><em>value</em><span class="sig-paren">)</span><a class="reference internal" href="_modules/pybot/abelec/iopi.html#Port.write"><span class="viewcode-link">[source]</span></a><a class="headerlink" href="#pybot.abelec.iopi.Port.write" title="Permalink to this definition">¶</a></dt>
+<dd><p>Write a value to the port
+:param int value: the value to be written
+:return: the clamped value (see <a class="reference internal" href="#pybot.abelec.iopi.Expander.write_register" title="pybot.abelec.iopi.Expander.write_register"><code class="xref py py-meth docutils literal"><span class="pre">Expander.write_register()</span></code></a>)
+:rtype: int</p>
+</dd></dl>
+
+</dd></dl>
+
 </div>
 
 

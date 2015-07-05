@@ -1,0 +1,408 @@
+
+
+<!DOCTYPE html>
+<!--[if IE 8]><html class="no-js lt-ie9" lang="en" > <![endif]-->
+<!--[if gt IE 8]><!--> <html class="no-js" lang="en" > <!--<![endif]-->
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  
+  <title>pybot.abelec.adcpi &mdash; pybot-abelec from POBOT 1.0 documentation</title>
+  
+
+  
+  
+
+  
+  <link href='https://fonts.googleapis.com/css?family=Lato:400,700,400italic,700italic|Roboto+Slab:400,700|Inconsolata:400,700&subset=latin,cyrillic' rel='stylesheet' type='text/css'>
+
+  
+  
+    
+
+  
+
+  
+  
+    <link rel="stylesheet" href="../../../_static/css/theme.css" type="text/css" />
+  
+
+  
+
+  
+    <link rel="top" title="pybot-abelec from POBOT 1.0 documentation" href="../../../index.html"/>
+        <link rel="up" title="Module code" href="../../index.html"/> 
+
+  
+  <script src="https://cdnjs.cloudflare.com/ajax/libs/modernizr/2.6.2/modernizr.min.js"></script>
+
+</head>
+
+<body class="wy-body-for-nav" role="document">
+
+  <div class="wy-grid-for-nav">
+
+    
+    <nav data-toggle="wy-nav-shift" class="wy-nav-side">
+      <div class="wy-side-nav-search">
+        
+          <a href="../../../index.html" class="fa fa-home"> pybot-abelec from POBOT</a>
+        
+        
+<div role="search">
+  <form id="rtd-search-form" class="wy-form" action="../../../search.html" method="get">
+    <input type="text" name="q" placeholder="Search docs" />
+    <input type="hidden" name="check_keywords" value="yes" />
+    <input type="hidden" name="area" value="default" />
+  </form>
+</div>
+      </div>
+
+      <div class="wy-menu wy-menu-vertical" data-spy="affix" role="navigation" aria-label="main navigation">
+        
+          
+          
+              <ul>
+<li class="toctree-l1"><a class="reference internal" href="../../../adcpi.html"><code class="docutils literal"><span class="pre">pybot_abelec.adcpi</span></code> module</a></li>
+<li class="toctree-l1"><a class="reference internal" href="../../../iopi.html"><code class="docutils literal"><span class="pre">pybot_abelec.iopi</span></code> module</a></li>
+<li class="toctree-l1"><a class="reference internal" href="../../../servopi.html"><code class="docutils literal"><span class="pre">pybot_abelec.servopi</span></code> module</a></li>
+</ul>
+
+          
+        
+      </div>
+      &nbsp;
+    </nav>
+
+    <section data-toggle="wy-nav-shift" class="wy-nav-content-wrap">
+
+      
+      <nav class="wy-nav-top" role="navigation" aria-label="top navigation">
+        <i data-toggle="wy-nav-top" class="fa fa-bars"></i>
+        <a href="../../../index.html">pybot-abelec from POBOT</a>
+      </nav>
+
+
+      
+      <div class="wy-nav-content">
+        <div class="rst-content">
+          <div role="navigation" aria-label="breadcrumbs navigation">
+  <ul class="wy-breadcrumbs">
+    <li><a href="../../../index.html">Docs</a> &raquo;</li>
+      
+          <li><a href="../../index.html">Module code</a> &raquo;</li>
+      
+    <li>pybot.abelec.adcpi</li>
+      <li class="wy-breadcrumbs-aside">
+        
+      </li>
+  </ul>
+  <hr/>
+</div>
+          <div role="main" class="document">
+            
+  <h1>Source code for pybot.abelec.adcpi</h1><div class="highlight"><pre>
+<span class="c"># -*- coding: utf-8 -*-</span>
+
+<span class="sd">&quot;&quot;&quot; A set of simple classes for interacting with the ADCPi board from AB Electronics</span>
+<span class="sd">(https://www.abelectronics.co.uk/products/3/Raspberry-Pi/17/ADC-Pi-V2---Raspberry-Pi-Analogue-to-Digital-converter).</span>
+
+<span class="sd">At the end of the chain is the individual input, provided by the class :py:class:`AnalogInput`</span>
+<span class="sd">(this will ease the transition for Arduino fans ;). ADC input instances</span>
+<span class="sd">are attached to a :py:class:`ADCPiBoard`, modeling the whole board and managing the common tasks.</span>
+
+<span class="sd">Details about chip configuration are hidden from the user, and a lot of things are optimized by caching</span>
+<span class="sd">what can be cached for avoiding paying too high a price for a high level design. Even if the added overhead</span>
+<span class="sd">could seem penalizing in term of performances, this is not that obvious, since all the processing done here</span>
+<span class="sd">must be done somewhere anyway. There are thus chances that the effective penalty (if ever any) will be</span>
+<span class="sd">negligible for most of the applications.</span>
+
+<span class="sd">To allow several classes instances being used for modeling a configuration with multiple boards,</span>
+<span class="sd">possibly of different types, the underlying bus must be created outside and provided as a dependency</span>
+<span class="sd">(see documentation about de &quot;Dependency Injection&quot; design pattern). Being able to provide whatever</span>
+<span class="sd">implementation of the basic read and write operations allows the use of a fake class simulating</span>
+<span class="sd">real operations, which made possible to test the rest of the application on a system not having</span>
+<span class="sd">a SMBus resource available, such as the development station PC for instance, or providing access to</span>
+<span class="sd">an I2C bus using an USB adapter for instance.</span>
+
+<span class="sd">Here is an example of the code used for configuring and reading an input.</span>
+
+<span class="sd">&gt;&gt;&gt; from pybot.raspi import i2c_bus</span>
+<span class="sd">&gt;&gt;&gt; from pybot.abelec.adcpi import ADCPiBoard</span>
+<span class="sd">&gt;&gt;&gt; ...</span>
+<span class="sd">&gt;&gt;&gt; # create an instance of the board (using default I2C addresses)</span>
+<span class="sd">&gt;&gt;&gt; board = ADCPiBoard(i2c_bus)</span>
+<span class="sd">&gt;&gt;&gt; # define an input, connected to pin 3 on the board header</span>
+<span class="sd">&gt;&gt;&gt; ldr_voltage = board.get_analog_input(3, rate=..., gain=...)</span>
+<span class="sd">&gt;&gt;&gt; ...</span>
+<span class="sd">&gt;&gt;&gt; # read it</span>
+<span class="sd">&gt;&gt;&gt; v = ldr_voltage.read()</span>
+
+<span class="sd">Pretty simple, no ?</span>
+
+<span class="sd">&quot;&quot;&quot;</span>
+
+<span class="n">__author__</span> <span class="o">=</span> <span class="s">&#39;Eric PASCUAL for POBOT&#39;</span>
+<span class="n">__version__</span> <span class="o">=</span> <span class="s">&#39;2.0.0&#39;</span>
+<span class="n">__email__</span> <span class="o">=</span> <span class="s">&#39;eric@pobot.org&#39;</span>
+
+
+<div class="viewcode-block" id="ADCPiBoard"><a class="viewcode-back" href="../../../adcpi.html#pybot.abelec.adcpi.ADCPiBoard">[docs]</a><span class="k">class</span> <span class="nc">ADCPiBoard</span><span class="p">(</span><span class="nb">object</span><span class="p">):</span>
+    <span class="sd">&quot;&quot;&quot; This class models an ADCPi board.</span>
+
+<span class="sd">    It also acts as a factory to provide instances of individual ADC inputs.</span>
+<span class="sd">    &quot;&quot;&quot;</span>
+
+    <span class="c"># sample rates</span>
+    <span class="n">RATE_12</span><span class="p">,</span> <span class="n">RATE_14</span><span class="p">,</span> <span class="n">RATE_16</span><span class="p">,</span> <span class="n">RATE_18</span> <span class="o">=</span> <span class="nb">range</span><span class="p">(</span><span class="mi">4</span><span class="p">)</span>
+    <span class="c"># gains</span>
+    <span class="n">GAIN_x1</span><span class="p">,</span> <span class="n">GAIN_x2</span><span class="p">,</span> <span class="n">GAIN_x4</span><span class="p">,</span> <span class="n">GAIN_x8</span> <span class="o">=</span> <span class="nb">range</span><span class="p">(</span><span class="mi">4</span><span class="p">)</span>
+    <span class="c"># resolutions (bits)</span>
+    <span class="n">RESOLUTIONS</span> <span class="o">=</span> <span class="p">(</span><span class="mi">12</span><span class="p">,</span> <span class="mi">14</span><span class="p">,</span> <span class="mi">16</span><span class="p">,</span> <span class="mi">18</span><span class="p">)</span>
+
+    <span class="n">gain_factor_to_gain_x</span> <span class="o">=</span> <span class="p">{</span>
+        <span class="mi">1</span><span class="p">:</span> <span class="n">GAIN_x1</span><span class="p">,</span>
+        <span class="mi">2</span><span class="p">:</span> <span class="n">GAIN_x2</span><span class="p">,</span>
+        <span class="mi">4</span><span class="p">:</span> <span class="n">GAIN_x4</span><span class="p">,</span>
+        <span class="mi">8</span><span class="p">:</span> <span class="n">GAIN_x8</span>
+    <span class="p">}</span>
+
+    <span class="n">resolution_to_rate_x</span> <span class="o">=</span> <span class="p">{</span>
+        <span class="mi">12</span><span class="p">:</span> <span class="n">RATE_12</span><span class="p">,</span>
+        <span class="mi">14</span><span class="p">:</span> <span class="n">RATE_14</span><span class="p">,</span>
+        <span class="mi">16</span><span class="p">:</span> <span class="n">RATE_16</span><span class="p">,</span>
+        <span class="mi">18</span><span class="p">:</span> <span class="n">RATE_18</span>
+    <span class="p">}</span>
+
+    <span class="n">CONV1_DEFAULT_ADDRESS</span> <span class="o">=</span> <span class="mh">0x68</span>
+    <span class="n">CONV2_DEFAULT_ADDRESS</span> <span class="o">=</span> <span class="mh">0x68</span>
+
+<div class="viewcode-block" id="ADCPiBoard.__init__"><a class="viewcode-back" href="../../../adcpi.html#pybot.abelec.adcpi.ADCPiBoard.__init__">[docs]</a>    <span class="k">def</span> <span class="nf">__init__</span><span class="p">(</span><span class="bp">self</span><span class="p">,</span> <span class="n">bus</span><span class="p">,</span> <span class="n">conv1_addr</span><span class="o">=</span><span class="n">CONV1_DEFAULT_ADDRESS</span> <span class="p">,</span> <span class="n">conv2_addr</span><span class="o">=</span><span class="n">CONV2_DEFAULT_ADDRESS</span><span class="p">):</span>
+        <span class="sd">&quot;&quot;&quot; An instance of the I2C/SMBus class must be provided here. The calls used in the</span>
+<span class="sd">        classes of this module are based on the smbus.SMBus interface. Any implementation providing</span>
+<span class="sd">        the same API can thus be used, including fake ones for testing.</span>
+
+<span class="sd">        :param bus: the I2C/SMBus instance</span>
+<span class="sd">        :param int conv1_addr: I2C address of converter 1</span>
+<span class="sd">        :param int conv2_addr: I2C address of converter 1</span>
+<span class="sd">        &quot;&quot;&quot;</span>
+        <span class="bp">self</span><span class="o">.</span><span class="n">_bus</span> <span class="o">=</span> <span class="n">bus</span>
+        <span class="bp">self</span><span class="o">.</span><span class="n">_converters</span> <span class="o">=</span> <span class="p">(</span>
+            <span class="n">Converter</span><span class="p">(</span><span class="n">bus</span><span class="p">,</span> <span class="n">conv1_addr</span><span class="p">),</span>
+            <span class="n">Converter</span><span class="p">(</span><span class="n">bus</span><span class="p">,</span> <span class="n">conv2_addr</span><span class="p">),</span>
+        <span class="p">)</span>
+        <span class="bp">self</span><span class="o">.</span><span class="n">_adcs</span> <span class="o">=</span> <span class="p">{}</span>
+</div>
+<div class="viewcode-block" id="ADCPiBoard.get_analog_input"><a class="viewcode-back" href="../../../adcpi.html#pybot.abelec.adcpi.ADCPiBoard.get_analog_input">[docs]</a>    <span class="k">def</span> <span class="nf">get_analog_input</span><span class="p">(</span><span class="bp">self</span><span class="p">,</span> <span class="n">board_input_num</span><span class="p">,</span> <span class="n">rate</span><span class="o">=</span><span class="n">RATE_12</span><span class="p">,</span> <span class="n">gain</span><span class="o">=</span><span class="n">GAIN_x1</span><span class="p">):</span>
+        <span class="sd">&quot;&quot;&quot; Convenience factory method returning an instance of :py:class:`AnalogInput`</span>
+<span class="sd">        representing an individual input.</span>
+
+<span class="sd">        Returned instances are cached, so that requesting an already requested input</span>
+<span class="sd">        returns the existing one and does not created a new one.</span>
+
+<span class="sd">        :param int board_input_num: the input number (in [1-8])</span>
+<span class="sd">        :param int rate: the sampling rate selector (ADCPiBoard.RATE_xx)</span>
+<span class="sd">        :param int gain: the input amplifier gain selector (ADCPiBoard.GAIN_xn)</span>
+<span class="sd">        :return: an instance of AnalogInput</span>
+<span class="sd">        :rtype: AnalogInput</span>
+<span class="sd">        &quot;&quot;&quot;</span>
+        <span class="k">if</span> <span class="ow">not</span> <span class="mi">1</span> <span class="o">&lt;=</span> <span class="n">board_input_num</span> <span class="o">&lt;=</span> <span class="mi">8</span><span class="p">:</span>
+            <span class="k">raise</span> <span class="ne">ValueError</span><span class="p">(</span><span class="s">&quot;invalid input num (</span><span class="si">%d</span><span class="s">)&quot;</span> <span class="o">%</span> <span class="n">board_input_num</span><span class="p">)</span>
+        <span class="k">try</span><span class="p">:</span>
+            <span class="c"># try first to get the object from the cache</span>
+            <span class="n">adc</span> <span class="o">=</span> <span class="bp">self</span><span class="o">.</span><span class="n">_adcs</span><span class="p">[</span><span class="n">board_input_num</span><span class="p">]</span>
+
+        <span class="k">except</span> <span class="ne">KeyError</span><span class="p">:</span>
+            <span class="c"># not yet created =&gt; do it</span>
+            <span class="n">conv_num</span><span class="p">,</span> <span class="n">channel_num</span> <span class="o">=</span> <span class="bp">self</span><span class="o">.</span><span class="n">_board_input_num_to_conv_channel</span><span class="p">(</span><span class="n">board_input_num</span><span class="p">)</span>
+
+            <span class="n">converter</span> <span class="o">=</span> <span class="bp">self</span><span class="o">.</span><span class="n">_converters</span><span class="p">[</span><span class="n">conv_num</span><span class="p">]</span>
+
+            <span class="c"># create the instance of the ADC class</span>
+            <span class="n">adc</span> <span class="o">=</span> <span class="n">AnalogInput</span><span class="p">(</span><span class="n">converter</span><span class="p">,</span> <span class="n">channel_num</span><span class="p">,</span> <span class="n">rate</span><span class="p">,</span> <span class="n">gain</span><span class="p">)</span>
+            <span class="c"># cache the result</span>
+            <span class="bp">self</span><span class="o">.</span><span class="n">_adcs</span><span class="p">[</span><span class="n">board_input_num</span><span class="p">]</span> <span class="o">=</span> <span class="n">adc</span>
+        <span class="k">return</span> <span class="n">adc</span>
+</div>
+    <span class="nd">@staticmethod</span>
+    <span class="k">def</span> <span class="nf">_board_input_num_to_conv_channel</span><span class="p">(</span><span class="n">board_io_num</span><span class="p">):</span>
+        <span class="n">board_io_num</span> <span class="o">-=</span> <span class="mi">1</span>
+        <span class="k">return</span> <span class="n">board_io_num</span> <span class="o">/</span> <span class="mi">4</span><span class="p">,</span> <span class="n">board_io_num</span> <span class="o">%</span> <span class="mi">4</span>
+
+</div>
+<div class="viewcode-block" id="Converter"><a class="viewcode-back" href="../../../adcpi.html#pybot.abelec.adcpi.Converter">[docs]</a><span class="k">class</span> <span class="nc">Converter</span><span class="p">(</span><span class="nb">object</span><span class="p">):</span>
+    <span class="sd">&quot;&quot;&quot; Models the MCP3424 converter chip, and handles its low level operations.</span>
+<span class="sd">    &quot;&quot;&quot;</span>
+<div class="viewcode-block" id="Converter.__init__"><a class="viewcode-back" href="../../../adcpi.html#pybot.abelec.adcpi.Converter.__init__">[docs]</a>    <span class="k">def</span> <span class="nf">__init__</span><span class="p">(</span><span class="bp">self</span><span class="p">,</span> <span class="n">bus</span><span class="p">,</span> <span class="n">i2c_addr</span><span class="p">):</span>
+        <span class="sd">&quot;&quot;&quot;</span>
+<span class="sd">        :param bus: the I2C/SMBus instance</span>
+<span class="sd">        :param int i2c_addr: expander I2C address</span>
+<span class="sd">        &quot;&quot;&quot;</span>
+        <span class="bp">self</span><span class="o">.</span><span class="n">_bus</span> <span class="o">=</span> <span class="n">bus</span>
+        <span class="bp">self</span><span class="o">.</span><span class="n">_addr</span> <span class="o">=</span> <span class="n">i2c_addr</span>
+</div>
+<div class="viewcode-block" id="Converter.read_raw"><a class="viewcode-back" href="../../../adcpi.html#pybot.abelec.adcpi.Converter.read_raw">[docs]</a>    <span class="k">def</span> <span class="nf">read_raw</span><span class="p">(</span><span class="bp">self</span><span class="p">,</span> <span class="n">config</span><span class="p">,</span> <span class="n">count</span><span class="o">=</span><span class="mi">32</span><span class="p">):</span>
+        <span class="sd">&quot;&quot;&quot; Performs a raw read</span>
+
+<span class="sd">        We can request just the number of needed bytes, to avoid transferring</span>
+<span class="sd">        the SMBus default 32 bytes chunk.</span>
+
+<span class="sd">        :param int config: the configuration byte</span>
+<span class="sd">        :param int count: number of requested bytes</span>
+<span class="sd">        :return: the data bytes as returned by the chip</span>
+<span class="sd">        :rtype: list</span>
+<span class="sd">        &quot;&quot;&quot;</span>
+        <span class="k">return</span> <span class="bp">self</span><span class="o">.</span><span class="n">_bus</span><span class="o">.</span><span class="n">read_i2c_block_data</span><span class="p">(</span><span class="bp">self</span><span class="o">.</span><span class="n">_addr</span><span class="p">,</span> <span class="n">config</span><span class="p">,</span> <span class="n">count</span><span class="p">)</span>
+
+</div></div>
+<div class="viewcode-block" id="AnalogInput"><a class="viewcode-back" href="../../../adcpi.html#pybot.abelec.adcpi.AnalogInput">[docs]</a><span class="k">class</span> <span class="nc">AnalogInput</span><span class="p">(</span><span class="nb">object</span><span class="p">):</span>
+    <span class="sd">&quot;&quot;&quot; Models an ADC input.</span>
+
+<span class="sd">    Once instantiated, signal values are obtained using methods :py:meth:`read_voltage` and</span>
+<span class="sd">    :py:meth:`read_raw`.</span>
+
+<span class="sd">    The input is configured (sampling rate and resolution, PGA gain) at instantiation time,</span>
+<span class="sd">    and cannot be changed after.</span>
+<span class="sd">    &quot;&quot;&quot;</span>
+
+    <span class="c"># configuration register masks</span>
+    <span class="n">NOT_READY</span> <span class="o">=</span> <span class="mh">0x80</span>
+    <span class="n">CONTINUOUS_CONVERSION</span> <span class="o">=</span> <span class="mh">0x10</span>
+
+    <span class="n">_gain_factors</span> <span class="o">=</span> <span class="p">(</span><span class="mf">0.5</span><span class="p">,</span> <span class="mf">1.0</span><span class="p">,</span> <span class="mf">2.0</span><span class="p">,</span> <span class="mf">4.0</span><span class="p">)</span>
+    <span class="n">_lsb_factors</span> <span class="o">=</span> <span class="p">(</span><span class="mf">0.0005</span><span class="p">,</span> <span class="mf">0.000125</span><span class="p">,</span> <span class="mf">0.00003125</span><span class="p">,</span> <span class="mf">0.0000078125</span><span class="p">)</span>
+
+    <span class="k">def</span> <span class="nf">_decoder_12</span><span class="p">(</span><span class="bp">self</span><span class="p">,</span> <span class="n">raw</span><span class="p">):</span>
+        <span class="n">h</span><span class="p">,</span> <span class="n">m</span> <span class="o">=</span> <span class="n">raw</span><span class="p">[:</span><span class="mi">2</span><span class="p">]</span>
+        <span class="k">return</span> <span class="mi">0</span> <span class="k">if</span> <span class="n">h</span> <span class="o">&amp;</span> <span class="mh">0x08</span> <span class="k">else</span> <span class="p">((</span><span class="n">h</span> <span class="o">&amp;</span> <span class="mh">0x07</span><span class="p">)</span> <span class="o">&lt;&lt;</span> <span class="mi">8</span><span class="p">)</span> <span class="o">|</span> <span class="n">m</span>
+
+    <span class="k">def</span> <span class="nf">_decoder_14</span><span class="p">(</span><span class="bp">self</span><span class="p">,</span> <span class="n">raw</span><span class="p">):</span>
+        <span class="n">h</span><span class="p">,</span> <span class="n">m</span> <span class="o">=</span> <span class="n">raw</span><span class="p">[:</span><span class="mi">2</span><span class="p">]</span>
+        <span class="k">return</span> <span class="mi">0</span> <span class="k">if</span> <span class="n">h</span> <span class="o">&amp;</span> <span class="mh">0x20</span> <span class="k">else</span> <span class="p">((</span><span class="n">h</span> <span class="o">&amp;</span> <span class="mh">0x1f</span><span class="p">)</span> <span class="o">&lt;&lt;</span> <span class="mi">8</span><span class="p">)</span> <span class="o">|</span> <span class="n">m</span>
+
+    <span class="k">def</span> <span class="nf">_decoder_16</span><span class="p">(</span><span class="bp">self</span><span class="p">,</span> <span class="n">raw</span><span class="p">):</span>
+        <span class="n">h</span><span class="p">,</span> <span class="n">m</span> <span class="o">=</span> <span class="n">raw</span><span class="p">[:</span><span class="mi">2</span><span class="p">]</span>
+        <span class="k">return</span> <span class="mi">0</span> <span class="k">if</span> <span class="n">h</span> <span class="o">&amp;</span> <span class="mh">0x80</span> <span class="k">else</span> <span class="p">((</span><span class="n">h</span> <span class="o">&amp;</span> <span class="mh">0x7f</span><span class="p">)</span> <span class="o">&lt;&lt;</span> <span class="mi">8</span><span class="p">)</span> <span class="o">|</span> <span class="n">m</span>
+
+    <span class="k">def</span> <span class="nf">_decoder_18</span><span class="p">(</span><span class="bp">self</span><span class="p">,</span> <span class="n">raw</span><span class="p">):</span>
+        <span class="n">h</span><span class="p">,</span> <span class="n">m</span><span class="p">,</span> <span class="n">l</span> <span class="o">=</span> <span class="n">raw</span><span class="p">[:</span><span class="mi">3</span><span class="p">]</span>
+        <span class="k">return</span> <span class="mi">0</span> <span class="k">if</span> <span class="n">h</span> <span class="o">&amp;</span> <span class="mh">0x02</span> <span class="k">else</span> <span class="p">((</span><span class="n">h</span> <span class="o">&amp;</span> <span class="mh">0x01</span><span class="p">)</span> <span class="o">&lt;&lt;</span> <span class="mi">16</span><span class="p">)</span> <span class="o">|</span> <span class="p">(</span><span class="n">m</span> <span class="o">&lt;&lt;</span> <span class="mi">8</span><span class="p">)</span> <span class="o">|</span> <span class="n">l</span>
+
+    <span class="c"># for each sampling rate : (decoding_method, reply length)</span>
+    <span class="n">_decoding_specs</span> <span class="o">=</span> <span class="p">{</span>
+        <span class="n">ADCPiBoard</span><span class="o">.</span><span class="n">RATE_12</span><span class="p">:</span> <span class="p">(</span><span class="n">_decoder_12</span><span class="p">,</span> <span class="mi">3</span><span class="p">),</span>
+        <span class="n">ADCPiBoard</span><span class="o">.</span><span class="n">RATE_14</span><span class="p">:</span> <span class="p">(</span><span class="n">_decoder_14</span><span class="p">,</span> <span class="mi">3</span><span class="p">),</span>
+        <span class="n">ADCPiBoard</span><span class="o">.</span><span class="n">RATE_16</span><span class="p">:</span> <span class="p">(</span><span class="n">_decoder_16</span><span class="p">,</span> <span class="mi">3</span><span class="p">),</span>
+        <span class="n">ADCPiBoard</span><span class="o">.</span><span class="n">RATE_18</span><span class="p">:</span> <span class="p">(</span><span class="n">_decoder_18</span><span class="p">,</span> <span class="mi">4</span><span class="p">)</span>
+    <span class="p">}</span>
+
+<div class="viewcode-block" id="AnalogInput.__init__"><a class="viewcode-back" href="../../../adcpi.html#pybot.abelec.adcpi.AnalogInput.__init__">[docs]</a>    <span class="k">def</span> <span class="nf">__init__</span><span class="p">(</span><span class="bp">self</span><span class="p">,</span> <span class="n">converter</span><span class="p">,</span> <span class="n">channel_num</span><span class="p">,</span> <span class="n">rate</span><span class="o">=</span><span class="n">ADCPiBoard</span><span class="o">.</span><span class="n">RATE_12</span><span class="p">,</span> <span class="n">gain</span><span class="o">=</span><span class="n">ADCPiBoard</span><span class="o">.</span><span class="n">GAIN_x1</span><span class="p">,</span> <span class="n">single</span><span class="o">=</span><span class="bp">False</span><span class="p">):</span>
+        <span class="sd">&quot;&quot;&quot;</span>
+<span class="sd">        :param Converter converter: the MCP chip this input belongs to</span>
+<span class="sd">        :param int channel_num: ADC channel num ([0-3]</span>
+<span class="sd">        :param bool single: True for single sample mode</span>
+<span class="sd">        :param int rate: sample rate and resolution selector (RATE_nn)</span>
+<span class="sd">        :param int gain: PGA gain (GAIN_xn)</span>
+<span class="sd">        &quot;&quot;&quot;</span>
+        <span class="k">if</span> <span class="ow">not</span> <span class="n">converter</span><span class="p">:</span>
+            <span class="k">raise</span> <span class="ne">ValueError</span><span class="p">(</span><span class="s">&#39;converter parameter is mandatory&#39;</span><span class="p">)</span>
+        <span class="k">if</span> <span class="ow">not</span> <span class="mi">0</span> <span class="o">&lt;=</span> <span class="n">channel_num</span> <span class="o">&lt;=</span> <span class="mi">3</span><span class="p">:</span>
+            <span class="k">raise</span> <span class="ne">ValueError</span><span class="p">(</span><span class="s">&#39;invalid channel number (</span><span class="si">%s</span><span class="s">)&#39;</span> <span class="o">%</span> <span class="n">channel_num</span><span class="p">)</span>
+        <span class="k">if</span> <span class="ow">not</span> <span class="n">ADCPiBoard</span><span class="o">.</span><span class="n">RATE_12</span> <span class="o">&lt;=</span> <span class="n">rate</span> <span class="o">&lt;=</span> <span class="n">ADCPiBoard</span><span class="o">.</span><span class="n">RATE_18</span><span class="p">:</span>
+            <span class="k">raise</span> <span class="ne">ValueError</span><span class="p">(</span><span class="s">&#39;invalid resolution (</span><span class="si">%s</span><span class="s">)&#39;</span> <span class="o">%</span> <span class="n">rate</span><span class="p">)</span>
+        <span class="k">if</span> <span class="ow">not</span> <span class="n">ADCPiBoard</span><span class="o">.</span><span class="n">GAIN_x1</span> <span class="o">&lt;=</span> <span class="n">gain</span> <span class="o">&lt;=</span> <span class="n">ADCPiBoard</span><span class="o">.</span><span class="n">GAIN_x8</span><span class="p">:</span>
+            <span class="k">raise</span> <span class="ne">ValueError</span><span class="p">(</span><span class="s">&#39;invalid gain (</span><span class="si">%s</span><span class="s">)&#39;</span> <span class="o">%</span> <span class="n">gain</span><span class="p">)</span>
+
+        <span class="bp">self</span><span class="o">.</span><span class="n">_converter</span> <span class="o">=</span> <span class="n">converter</span>
+        <span class="bp">self</span><span class="o">.</span><span class="n">_channel_num</span> <span class="o">=</span> <span class="n">channel_num</span>
+        <span class="bp">self</span><span class="o">.</span><span class="n">_config</span> <span class="o">=</span> <span class="p">(</span>
+            <span class="p">(</span><span class="n">channel_num</span> <span class="o">&lt;&lt;</span> <span class="mi">5</span><span class="p">)</span> <span class="o">|</span>
+            <span class="p">(</span><span class="bp">self</span><span class="o">.</span><span class="n">CONTINUOUS_CONVERSION</span> <span class="k">if</span> <span class="ow">not</span> <span class="n">single</span> <span class="k">else</span> <span class="mi">0</span><span class="p">)</span> <span class="o">|</span>
+            <span class="n">rate</span> <span class="o">|</span> <span class="n">gain</span>
+        <span class="p">)</span> <span class="o">&amp;</span> <span class="mh">0xff</span>
+        <span class="bp">self</span><span class="o">.</span><span class="n">_decoder</span><span class="p">,</span> <span class="bp">self</span><span class="o">.</span><span class="n">_reply_len</span> <span class="o">=</span> <span class="bp">self</span><span class="o">.</span><span class="n">_decoding_specs</span><span class="p">[</span><span class="n">rate</span><span class="p">]</span>
+
+        <span class="c"># Note: the last factor of the formula hereafter has been found by experimental measurement</span>
+        <span class="bp">self</span><span class="o">.</span><span class="n">_scale_factor</span> <span class="o">=</span> <span class="bp">self</span><span class="o">.</span><span class="n">_lsb_factors</span><span class="p">[</span><span class="n">rate</span><span class="p">]</span> <span class="o">/</span> <span class="bp">self</span><span class="o">.</span><span class="n">_gain_factors</span><span class="p">[</span><span class="n">gain</span><span class="p">]</span> <span class="o">*</span> <span class="mf">2.478439425</span>
+</div>
+<div class="viewcode-block" id="AnalogInput.read_voltage"><a class="viewcode-back" href="../../../adcpi.html#pybot.abelec.adcpi.AnalogInput.read_voltage">[docs]</a>    <span class="k">def</span> <span class="nf">read_voltage</span><span class="p">(</span><span class="bp">self</span><span class="p">):</span>
+        <span class="sd">&quot;&quot;&quot; Samples the input and converts the raw reading to corresponding voltage.</span>
+<span class="sd">        :return: the input voltage</span>
+<span class="sd">        :rtype: float</span>
+<span class="sd">        &quot;&quot;&quot;</span>
+        <span class="k">return</span> <span class="bp">self</span><span class="o">.</span><span class="n">read_raw</span><span class="p">()</span> <span class="o">*</span> <span class="bp">self</span><span class="o">.</span><span class="n">_scale_factor</span>
+</div>
+    <span class="k">def</span> <span class="nf">convert_raw</span><span class="p">(</span><span class="bp">self</span><span class="p">,</span> <span class="n">raw</span><span class="p">):</span>
+        <span class="k">return</span> <span class="n">raw</span> <span class="o">*</span> <span class="bp">self</span><span class="o">.</span><span class="n">_scale_factor</span>
+
+<div class="viewcode-block" id="AnalogInput.read_raw"><a class="viewcode-back" href="../../../adcpi.html#pybot.abelec.adcpi.AnalogInput.read_raw">[docs]</a>    <span class="k">def</span> <span class="nf">read_raw</span><span class="p">(</span><span class="bp">self</span><span class="p">):</span>
+        <span class="sd">&quot;&quot;&quot; Samples the input and returns its raw value.</span>
+
+<span class="sd">        Proper decoding is applied, based on configured gain and sample rate.</span>
+<span class="sd">        :return: the input raw value</span>
+<span class="sd">        :rtype: int</span>
+<span class="sd">        &quot;&quot;&quot;</span>
+        <span class="k">while</span> <span class="bp">True</span><span class="p">:</span>
+            <span class="n">raw</span> <span class="o">=</span> <span class="bp">self</span><span class="o">.</span><span class="n">_converter</span><span class="o">.</span><span class="n">read_raw</span><span class="p">(</span><span class="bp">self</span><span class="o">.</span><span class="n">_config</span><span class="p">,</span> <span class="bp">self</span><span class="o">.</span><span class="n">_reply_len</span><span class="p">)</span>
+            <span class="n">cfg</span> <span class="o">=</span> <span class="n">raw</span><span class="p">[</span><span class="o">-</span><span class="mi">1</span><span class="p">]</span>
+            <span class="k">if</span> <span class="ow">not</span><span class="p">(</span><span class="n">cfg</span> <span class="o">&amp;</span> <span class="bp">self</span><span class="o">.</span><span class="n">NOT_READY</span><span class="p">):</span>
+                <span class="k">return</span> <span class="bp">self</span><span class="o">.</span><span class="n">_decoder</span><span class="p">(</span><span class="bp">self</span><span class="p">,</span> <span class="n">raw</span><span class="p">)</span></div></div>
+</pre></div>
+
+          </div>
+          <footer>
+  
+
+  <hr/>
+
+  <div role="contentinfo">
+    <p>
+        &copy; Copyright 2015, Eric Pascual.
+    </p>
+  </div>
+
+  Built with <a href="http://sphinx-doc.org/">Sphinx</a> using a <a href="https://github.com/snide/sphinx_rtd_theme">theme</a> provided by <a href="https://readthedocs.org">Read the Docs</a>.
+  
+</footer>
+        </div>
+      </div>
+
+    </section>
+
+  </div>
+  
+
+
+  
+
+    <script type="text/javascript">
+        var DOCUMENTATION_OPTIONS = {
+            URL_ROOT:'../../../',
+            VERSION:'1.0',
+            COLLAPSE_INDEX:false,
+            FILE_SUFFIX:'.html',
+            HAS_SOURCE:  true
+        };
+    </script>
+      <script type="text/javascript" src="../../../_static/jquery.js"></script>
+      <script type="text/javascript" src="../../../_static/underscore.js"></script>
+      <script type="text/javascript" src="../../../_static/doctools.js"></script>
+
+  
+
+  
+  
+    <script type="text/javascript" src="../../../_static/js/theme.js"></script>
+  
+
+  
+  
+  <script type="text/javascript">
+      jQuery(function () {
+          SphinxRtdTheme.StickyNav.enable();
+      });
+  </script>
+   
+
+</body>
+</html>

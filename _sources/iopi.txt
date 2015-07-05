@@ -1,6 +1,6 @@
 ``pybot_abelec.iopi`` module
 ============================
 
-.. automodule:: pybot_abelec.iopi
+.. automodule:: pybot.abelec.iopi
     :members:
     :show-inheritance:

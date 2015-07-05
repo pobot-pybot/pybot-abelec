@@ -102,8 +102,194 @@
 </div>
           <div role="main" class="document">
             
-  <div class="section" id="pybot-abelec-adcpi-module">
-<h1><code class="docutils literal"><span class="pre">pybot_abelec.adcpi</span></code> module<a class="headerlink" href="#pybot-abelec-adcpi-module" title="Permalink to this headline">¶</a></h1>
+  <div class="section" id="module-pybot.abelec.adcpi">
+<span id="pybot-abelec-adcpi-module"></span><h1><code class="docutils literal"><span class="pre">pybot_abelec.adcpi</span></code> module<a class="headerlink" href="#module-pybot.abelec.adcpi" title="Permalink to this headline">¶</a></h1>
+<p>A set of simple classes for interacting with the ADCPi board from AB Electronics
+(<a class="reference external" href="https://www.abelectronics.co.uk/products/3/Raspberry-Pi/17/ADC-Pi-V2---Raspberry-Pi-Analogue-to-Digital-converter">https://www.abelectronics.co.uk/products/3/Raspberry-Pi/17/ADC-Pi-V2&#8212;Raspberry-Pi-Analogue-to-Digital-converter</a>).</p>
+<p>At the end of the chain is the individual input, provided by the class <a class="reference internal" href="#pybot.abelec.adcpi.AnalogInput" title="pybot.abelec.adcpi.AnalogInput"><code class="xref py py-class docutils literal"><span class="pre">AnalogInput</span></code></a>
+(this will ease the transition for Arduino fans ;). ADC input instances
+are attached to a <a class="reference internal" href="#pybot.abelec.adcpi.ADCPiBoard" title="pybot.abelec.adcpi.ADCPiBoard"><code class="xref py py-class docutils literal"><span class="pre">ADCPiBoard</span></code></a>, modeling the whole board and managing the common tasks.</p>
+<p>Details about chip configuration are hidden from the user, and a lot of things are optimized by caching
+what can be cached for avoiding paying too high a price for a high level design. Even if the added overhead
+could seem penalizing in term of performances, this is not that obvious, since all the processing done here
+must be done somewhere anyway. There are thus chances that the effective penalty (if ever any) will be
+negligible for most of the applications.</p>
+<p>To allow several classes instances being used for modeling a configuration with multiple boards,
+possibly of different types, the underlying bus must be created outside and provided as a dependency
+(see documentation about de &#8220;Dependency Injection&#8221; design pattern). Being able to provide whatever
+implementation of the basic read and write operations allows the use of a fake class simulating
+real operations, which made possible to test the rest of the application on a system not having
+a SMBus resource available, such as the development station PC for instance, or providing access to
+an I2C bus using an USB adapter for instance.</p>
+<p>Here is an example of the code used for configuring and reading an input.</p>
+<div class="highlight-python"><div class="highlight"><pre><span class="gp">&gt;&gt;&gt; </span><span class="kn">from</span> <span class="nn">pybot.raspi</span> <span class="kn">import</span> <span class="n">i2c_bus</span>
+<span class="gp">&gt;&gt;&gt; </span><span class="kn">from</span> <span class="nn">pybot.abelec.adcpi</span> <span class="kn">import</span> <span class="n">ADCPiBoard</span>
+<span class="gp">&gt;&gt;&gt; </span><span class="o">...</span>
+<span class="gp">&gt;&gt;&gt; </span><span class="c"># create an instance of the board (using default I2C addresses)</span>
+<span class="gp">&gt;&gt;&gt; </span><span class="n">board</span> <span class="o">=</span> <span class="n">ADCPiBoard</span><span class="p">(</span><span class="n">i2c_bus</span><span class="p">)</span>
+<span class="gp">&gt;&gt;&gt; </span><span class="c"># define an input, connected to pin 3 on the board header</span>
+<span class="gp">&gt;&gt;&gt; </span><span class="n">ldr_voltage</span> <span class="o">=</span> <span class="n">board</span><span class="o">.</span><span class="n">get_analog_input</span><span class="p">(</span><span class="mi">3</span><span class="p">,</span> <span class="n">rate</span><span class="o">=...</span><span class="p">,</span> <span class="n">gain</span><span class="o">=...</span><span class="p">)</span>
+<span class="gp">&gt;&gt;&gt; </span><span class="o">...</span>
+<span class="gp">&gt;&gt;&gt; </span><span class="c"># read it</span>
+<span class="gp">&gt;&gt;&gt; </span><span class="n">v</span> <span class="o">=</span> <span class="n">ldr_voltage</span><span class="o">.</span><span class="n">read</span><span class="p">()</span>
+</pre></div>
+</div>
+<p>Pretty simple, no ?</p>
+<dl class="class">
+<dt id="pybot.abelec.adcpi.ADCPiBoard">
+<em class="property">class </em><code class="descclassname">pybot.abelec.adcpi.</code><code class="descname">ADCPiBoard</code><span class="sig-paren">(</span><em>bus</em>, <em>conv1_addr=104</em>, <em>conv2_addr=104</em><span class="sig-paren">)</span><a class="reference internal" href="_modules/pybot/abelec/adcpi.html#ADCPiBoard"><span class="viewcode-link">[source]</span></a><a class="headerlink" href="#pybot.abelec.adcpi.ADCPiBoard" title="Permalink to this definition">¶</a></dt>
+<dd><p>Bases: <a class="reference external" href="https://docs.python.org/library/functions.html#object" title="(in Python v2.7)"><code class="xref py py-class docutils literal"><span class="pre">object</span></code></a></p>
+<p>This class models an ADCPi board.</p>
+<p>It also acts as a factory to provide instances of individual ADC inputs.</p>
+<dl class="method">
+<dt id="pybot.abelec.adcpi.ADCPiBoard.__init__">
+<code class="descname">__init__</code><span class="sig-paren">(</span><em>bus</em>, <em>conv1_addr=104</em>, <em>conv2_addr=104</em><span class="sig-paren">)</span><a class="reference internal" href="_modules/pybot/abelec/adcpi.html#ADCPiBoard.__init__"><span class="viewcode-link">[source]</span></a><a class="headerlink" href="#pybot.abelec.adcpi.ADCPiBoard.__init__" title="Permalink to this definition">¶</a></dt>
+<dd><p>An instance of the I2C/SMBus class must be provided here. The calls used in the
+classes of this module are based on the smbus.SMBus interface. Any implementation providing
+the same API can thus be used, including fake ones for testing.</p>
+<table class="docutils field-list" frame="void" rules="none">
+<col class="field-name" />
+<col class="field-body" />
+<tbody valign="top">
+<tr class="field-odd field"><th class="field-name">Parameters:</th><td class="field-body"><ul class="first last simple">
+<li><strong>bus</strong> &#8211; the I2C/SMBus instance</li>
+<li><strong>conv1_addr</strong> (<a class="reference external" href="https://docs.python.org/library/functions.html#int" title="(in Python v2.7)"><em>int</em></a>) &#8211; I2C address of converter 1</li>
+<li><strong>conv2_addr</strong> (<a class="reference external" href="https://docs.python.org/library/functions.html#int" title="(in Python v2.7)"><em>int</em></a>) &#8211; I2C address of converter 1</li>
+</ul>
+</td>
+</tr>
+</tbody>
+</table>
+</dd></dl>
+
+<dl class="method">
+<dt id="pybot.abelec.adcpi.ADCPiBoard.get_analog_input">
+<code class="descname">get_analog_input</code><span class="sig-paren">(</span><em>board_input_num</em>, <em>rate=0</em>, <em>gain=0</em><span class="sig-paren">)</span><a class="reference internal" href="_modules/pybot/abelec/adcpi.html#ADCPiBoard.get_analog_input"><span class="viewcode-link">[source]</span></a><a class="headerlink" href="#pybot.abelec.adcpi.ADCPiBoard.get_analog_input" title="Permalink to this definition">¶</a></dt>
+<dd><p>Convenience factory method returning an instance of <a class="reference internal" href="#pybot.abelec.adcpi.AnalogInput" title="pybot.abelec.adcpi.AnalogInput"><code class="xref py py-class docutils literal"><span class="pre">AnalogInput</span></code></a>
+representing an individual input.</p>
+<p>Returned instances are cached, so that requesting an already requested input
+returns the existing one and does not created a new one.</p>
+<table class="docutils field-list" frame="void" rules="none">
+<col class="field-name" />
+<col class="field-body" />
+<tbody valign="top">
+<tr class="field-odd field"><th class="field-name">Parameters:</th><td class="field-body"><ul class="first simple">
+<li><strong>board_input_num</strong> (<a class="reference external" href="https://docs.python.org/library/functions.html#int" title="(in Python v2.7)"><em>int</em></a>) &#8211; the input number (in [1-8])</li>
+<li><strong>rate</strong> (<a class="reference external" href="https://docs.python.org/library/functions.html#int" title="(in Python v2.7)"><em>int</em></a>) &#8211; the sampling rate selector (ADCPiBoard.RATE_xx)</li>
+<li><strong>gain</strong> (<a class="reference external" href="https://docs.python.org/library/functions.html#int" title="(in Python v2.7)"><em>int</em></a>) &#8211; the input amplifier gain selector (ADCPiBoard.GAIN_xn)</li>
+</ul>
+</td>
+</tr>
+<tr class="field-even field"><th class="field-name">Returns:</th><td class="field-body"><p class="first">an instance of AnalogInput</p>
+</td>
+</tr>
+<tr class="field-odd field"><th class="field-name">Return type:</th><td class="field-body"><p class="first last"><a class="reference internal" href="#pybot.abelec.adcpi.AnalogInput" title="pybot.abelec.adcpi.AnalogInput">AnalogInput</a></p>
+</td>
+</tr>
+</tbody>
+</table>
+</dd></dl>
+
+</dd></dl>
+
+<dl class="class">
+<dt id="pybot.abelec.adcpi.AnalogInput">
+<em class="property">class </em><code class="descclassname">pybot.abelec.adcpi.</code><code class="descname">AnalogInput</code><span class="sig-paren">(</span><em>converter</em>, <em>channel_num</em>, <em>rate=0</em>, <em>gain=0</em>, <em>single=False</em><span class="sig-paren">)</span><a class="reference internal" href="_modules/pybot/abelec/adcpi.html#AnalogInput"><span class="viewcode-link">[source]</span></a><a class="headerlink" href="#pybot.abelec.adcpi.AnalogInput" title="Permalink to this definition">¶</a></dt>
+<dd><p>Bases: <a class="reference external" href="https://docs.python.org/library/functions.html#object" title="(in Python v2.7)"><code class="xref py py-class docutils literal"><span class="pre">object</span></code></a></p>
+<p>Models an ADC input.</p>
+<p>Once instantiated, signal values are obtained using methods <a class="reference internal" href="#pybot.abelec.adcpi.AnalogInput.read_voltage" title="pybot.abelec.adcpi.AnalogInput.read_voltage"><code class="xref py py-meth docutils literal"><span class="pre">read_voltage()</span></code></a> and
+<a class="reference internal" href="#pybot.abelec.adcpi.AnalogInput.read_raw" title="pybot.abelec.adcpi.AnalogInput.read_raw"><code class="xref py py-meth docutils literal"><span class="pre">read_raw()</span></code></a>.</p>
+<p>The input is configured (sampling rate and resolution, PGA gain) at instantiation time,
+and cannot be changed after.</p>
+<dl class="method">
+<dt id="pybot.abelec.adcpi.AnalogInput.__init__">
+<code class="descname">__init__</code><span class="sig-paren">(</span><em>converter</em>, <em>channel_num</em>, <em>rate=0</em>, <em>gain=0</em>, <em>single=False</em><span class="sig-paren">)</span><a class="reference internal" href="_modules/pybot/abelec/adcpi.html#AnalogInput.__init__"><span class="viewcode-link">[source]</span></a><a class="headerlink" href="#pybot.abelec.adcpi.AnalogInput.__init__" title="Permalink to this definition">¶</a></dt>
+<dd><table class="docutils field-list" frame="void" rules="none">
+<col class="field-name" />
+<col class="field-body" />
+<tbody valign="top">
+<tr class="field-odd field"><th class="field-name">Parameters:</th><td class="field-body"><ul class="first last simple">
+<li><strong>converter</strong> (<a class="reference internal" href="#pybot.abelec.adcpi.Converter" title="pybot.abelec.adcpi.Converter"><em>Converter</em></a>) &#8211; the MCP chip this input belongs to</li>
+<li><strong>channel_num</strong> (<a class="reference external" href="https://docs.python.org/library/functions.html#int" title="(in Python v2.7)"><em>int</em></a>) &#8211; ADC channel num ([0-3]</li>
+<li><strong>single</strong> (<a class="reference external" href="https://docs.python.org/library/functions.html#bool" title="(in Python v2.7)"><em>bool</em></a>) &#8211; True for single sample mode</li>
+<li><strong>rate</strong> (<a class="reference external" href="https://docs.python.org/library/functions.html#int" title="(in Python v2.7)"><em>int</em></a>) &#8211; sample rate and resolution selector (RATE_nn)</li>
+<li><strong>gain</strong> (<a class="reference external" href="https://docs.python.org/library/functions.html#int" title="(in Python v2.7)"><em>int</em></a>) &#8211; PGA gain (GAIN_xn)</li>
+</ul>
+</td>
+</tr>
+</tbody>
+</table>
+</dd></dl>
+
+<dl class="method">
+<dt id="pybot.abelec.adcpi.AnalogInput.read_raw">
+<code class="descname">read_raw</code><span class="sig-paren">(</span><span class="sig-paren">)</span><a class="reference internal" href="_modules/pybot/abelec/adcpi.html#AnalogInput.read_raw"><span class="viewcode-link">[source]</span></a><a class="headerlink" href="#pybot.abelec.adcpi.AnalogInput.read_raw" title="Permalink to this definition">¶</a></dt>
+<dd><p>Samples the input and returns its raw value.</p>
+<p>Proper decoding is applied, based on configured gain and sample rate.
+:return: the input raw value
+:rtype: int</p>
+</dd></dl>
+
+<dl class="method">
+<dt id="pybot.abelec.adcpi.AnalogInput.read_voltage">
+<code class="descname">read_voltage</code><span class="sig-paren">(</span><span class="sig-paren">)</span><a class="reference internal" href="_modules/pybot/abelec/adcpi.html#AnalogInput.read_voltage"><span class="viewcode-link">[source]</span></a><a class="headerlink" href="#pybot.abelec.adcpi.AnalogInput.read_voltage" title="Permalink to this definition">¶</a></dt>
+<dd><p>Samples the input and converts the raw reading to corresponding voltage.
+:return: the input voltage
+:rtype: float</p>
+</dd></dl>
+
+</dd></dl>
+
+<dl class="class">
+<dt id="pybot.abelec.adcpi.Converter">
+<em class="property">class </em><code class="descclassname">pybot.abelec.adcpi.</code><code class="descname">Converter</code><span class="sig-paren">(</span><em>bus</em>, <em>i2c_addr</em><span class="sig-paren">)</span><a class="reference internal" href="_modules/pybot/abelec/adcpi.html#Converter"><span class="viewcode-link">[source]</span></a><a class="headerlink" href="#pybot.abelec.adcpi.Converter" title="Permalink to this definition">¶</a></dt>
+<dd><p>Bases: <a class="reference external" href="https://docs.python.org/library/functions.html#object" title="(in Python v2.7)"><code class="xref py py-class docutils literal"><span class="pre">object</span></code></a></p>
+<p>Models the MCP3424 converter chip, and handles its low level operations.</p>
+<dl class="method">
+<dt id="pybot.abelec.adcpi.Converter.__init__">
+<code class="descname">__init__</code><span class="sig-paren">(</span><em>bus</em>, <em>i2c_addr</em><span class="sig-paren">)</span><a class="reference internal" href="_modules/pybot/abelec/adcpi.html#Converter.__init__"><span class="viewcode-link">[source]</span></a><a class="headerlink" href="#pybot.abelec.adcpi.Converter.__init__" title="Permalink to this definition">¶</a></dt>
+<dd><table class="docutils field-list" frame="void" rules="none">
+<col class="field-name" />
+<col class="field-body" />
+<tbody valign="top">
+<tr class="field-odd field"><th class="field-name">Parameters:</th><td class="field-body"><ul class="first last simple">
+<li><strong>bus</strong> &#8211; the I2C/SMBus instance</li>
+<li><strong>i2c_addr</strong> (<a class="reference external" href="https://docs.python.org/library/functions.html#int" title="(in Python v2.7)"><em>int</em></a>) &#8211; expander I2C address</li>
+</ul>
+</td>
+</tr>
+</tbody>
+</table>
+</dd></dl>
+
+<dl class="method">
+<dt id="pybot.abelec.adcpi.Converter.read_raw">
+<code class="descname">read_raw</code><span class="sig-paren">(</span><em>config</em>, <em>count=32</em><span class="sig-paren">)</span><a class="reference internal" href="_modules/pybot/abelec/adcpi.html#Converter.read_raw"><span class="viewcode-link">[source]</span></a><a class="headerlink" href="#pybot.abelec.adcpi.Converter.read_raw" title="Permalink to this definition">¶</a></dt>
+<dd><p>Performs a raw read</p>
+<p>We can request just the number of needed bytes, to avoid transferring
+the SMBus default 32 bytes chunk.</p>
+<table class="docutils field-list" frame="void" rules="none">
+<col class="field-name" />
+<col class="field-body" />
+<tbody valign="top">
+<tr class="field-odd field"><th class="field-name">Parameters:</th><td class="field-body"><ul class="first simple">
+<li><strong>config</strong> (<a class="reference external" href="https://docs.python.org/library/functions.html#int" title="(in Python v2.7)"><em>int</em></a>) &#8211; the configuration byte</li>
+<li><strong>count</strong> (<a class="reference external" href="https://docs.python.org/library/functions.html#int" title="(in Python v2.7)"><em>int</em></a>) &#8211; number of requested bytes</li>
+</ul>
+</td>
+</tr>
+<tr class="field-even field"><th class="field-name">Returns:</th><td class="field-body"><p class="first">the data bytes as returned by the chip</p>
+</td>
+</tr>
+<tr class="field-odd field"><th class="field-name">Return type:</th><td class="field-body"><p class="first last"><a class="reference external" href="https://docs.python.org/library/functions.html#list" title="(in Python v2.7)">list</a></p>
+</td>
+</tr>
+</tbody>
+</table>
+</dd></dl>
+
+</dd></dl>
+
 </div>
 
 
