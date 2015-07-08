@@ -1,6 +1,6 @@
 ``pybot_abelec.adcpi`` module
 =============================
 
-.. automodule:: pybot_abelec.adcpi
+.. automodule:: pybot.abelec.adcpi
     :members:
     :show-inheritance:

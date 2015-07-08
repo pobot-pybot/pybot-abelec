@@ -1,7 +1,7 @@
 Welcome to pybot-abelec package documentation!
 ==============================================
 
-.. automodule:: pybot_abelec
+.. automodule:: pybot.abelec
 
 Contents
 --------

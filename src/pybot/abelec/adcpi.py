@@ -80,7 +80,7 @@ class ADCPiBoard(object):
 
         :param bus: the I2C/SMBus instance
         :param int conv1_addr: I2C address of converter 1
-        :param int conv2_addr: I2C address of converter 1
+        :param int conv2_addr: I2C address of converter 2
         """
         self._bus = bus
         self._converters = (
@@ -223,6 +223,7 @@ class AnalogInput(object):
 
     def read_voltage(self):
         """ Samples the input and converts the raw reading to corresponding voltage.
+
         :return: the input voltage
         :rtype: float
         """
@@ -235,6 +236,7 @@ class AnalogInput(object):
         """ Samples the input and returns its raw value.
 
         Proper decoding is applied, based on configured gain and sample rate.
+
         :return: the input raw value
         :rtype: int
         """
