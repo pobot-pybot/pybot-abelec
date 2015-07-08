@@ -154,7 +154,7 @@ the same API can thus be used, including fake ones for testing.</p>
 <tr class="field-odd field"><th class="field-name">Parameters:</th><td class="field-body"><ul class="first last simple">
 <li><strong>bus</strong> &#8211; the I2C/SMBus instance</li>
 <li><strong>conv1_addr</strong> (<a class="reference external" href="https://docs.python.org/library/functions.html#int" title="(in Python v2.7)"><em>int</em></a>) &#8211; I2C address of converter 1</li>
-<li><strong>conv2_addr</strong> (<a class="reference external" href="https://docs.python.org/library/functions.html#int" title="(in Python v2.7)"><em>int</em></a>) &#8211; I2C address of converter 1</li>
+<li><strong>conv2_addr</strong> (<a class="reference external" href="https://docs.python.org/library/functions.html#int" title="(in Python v2.7)"><em>int</em></a>) &#8211; I2C address of converter 2</li>
 </ul>
 </td>
 </tr>
@@ -225,17 +225,33 @@ and cannot be changed after.</p>
 <dt id="pybot.abelec.adcpi.AnalogInput.read_raw">
 <code class="descname">read_raw</code><span class="sig-paren">(</span><span class="sig-paren">)</span><a class="reference internal" href="_modules/pybot/abelec/adcpi.html#AnalogInput.read_raw"><span class="viewcode-link">[source]</span></a><a class="headerlink" href="#pybot.abelec.adcpi.AnalogInput.read_raw" title="Permalink to this definition">¶</a></dt>
 <dd><p>Samples the input and returns its raw value.</p>
-<p>Proper decoding is applied, based on configured gain and sample rate.
-:return: the input raw value
-:rtype: int</p>
+<p>Proper decoding is applied, based on configured gain and sample rate.</p>
+<table class="docutils field-list" frame="void" rules="none">
+<col class="field-name" />
+<col class="field-body" />
+<tbody valign="top">
+<tr class="field-odd field"><th class="field-name">Returns:</th><td class="field-body">the input raw value</td>
+</tr>
+<tr class="field-even field"><th class="field-name">Return type:</th><td class="field-body"><a class="reference external" href="https://docs.python.org/library/functions.html#int" title="(in Python v2.7)">int</a></td>
+</tr>
+</tbody>
+</table>
 </dd></dl>
 
 <dl class="method">
 <dt id="pybot.abelec.adcpi.AnalogInput.read_voltage">
 <code class="descname">read_voltage</code><span class="sig-paren">(</span><span class="sig-paren">)</span><a class="reference internal" href="_modules/pybot/abelec/adcpi.html#AnalogInput.read_voltage"><span class="viewcode-link">[source]</span></a><a class="headerlink" href="#pybot.abelec.adcpi.AnalogInput.read_voltage" title="Permalink to this definition">¶</a></dt>
-<dd><p>Samples the input and converts the raw reading to corresponding voltage.
-:return: the input voltage
-:rtype: float</p>
+<dd><p>Samples the input and converts the raw reading to corresponding voltage.</p>
+<table class="docutils field-list" frame="void" rules="none">
+<col class="field-name" />
+<col class="field-body" />
+<tbody valign="top">
+<tr class="field-odd field"><th class="field-name">Returns:</th><td class="field-body">the input voltage</td>
+</tr>
+<tr class="field-even field"><th class="field-name">Return type:</th><td class="field-body"><a class="reference external" href="https://docs.python.org/library/functions.html#float" title="(in Python v2.7)">float</a></td>
+</tr>
+</tbody>
+</table>
 </dd></dl>
 
 </dd></dl>

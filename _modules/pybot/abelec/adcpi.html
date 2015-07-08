@@ -184,7 +184,7 @@
 
 <span class="sd">        :param bus: the I2C/SMBus instance</span>
 <span class="sd">        :param int conv1_addr: I2C address of converter 1</span>
-<span class="sd">        :param int conv2_addr: I2C address of converter 1</span>
+<span class="sd">        :param int conv2_addr: I2C address of converter 2</span>
 <span class="sd">        &quot;&quot;&quot;</span>
         <span class="bp">self</span><span class="o">.</span><span class="n">_bus</span> <span class="o">=</span> <span class="n">bus</span>
         <span class="bp">self</span><span class="o">.</span><span class="n">_converters</span> <span class="o">=</span> <span class="p">(</span>
@@ -327,6 +327,7 @@
 </div>
 <div class="viewcode-block" id="AnalogInput.read_voltage"><a class="viewcode-back" href="../../../adcpi.html#pybot.abelec.adcpi.AnalogInput.read_voltage">[docs]</a>    <span class="k">def</span> <span class="nf">read_voltage</span><span class="p">(</span><span class="bp">self</span><span class="p">):</span>
         <span class="sd">&quot;&quot;&quot; Samples the input and converts the raw reading to corresponding voltage.</span>
+
 <span class="sd">        :return: the input voltage</span>
 <span class="sd">        :rtype: float</span>
 <span class="sd">        &quot;&quot;&quot;</span>
@@ -339,6 +340,7 @@
         <span class="sd">&quot;&quot;&quot; Samples the input and returns its raw value.</span>
 
 <span class="sd">        Proper decoding is applied, based on configured gain and sample rate.</span>
+
 <span class="sd">        :return: the input raw value</span>
 <span class="sd">        :rtype: int</span>
 <span class="sd">        &quot;&quot;&quot;</span>
