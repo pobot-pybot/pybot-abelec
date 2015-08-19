@@ -4,4 +4,4 @@ dist/
 
 src/pybot_abelec.egg-info
 build
-docs/_build
+doc/_build
