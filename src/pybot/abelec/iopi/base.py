@@ -1,7 +1,6 @@
 # -*- coding: utf-8 -*-
 
-""" A set of simple classes for interacting with the IOPi board from AB Electronics
-(https://www.abelectronics.co.uk/products/3/Raspberry-Pi/18/IO-Pi).
+""" Base classes for working with the ABElectronic IOPi board.
 
 At the end of the chain is the individual IO, provided by the classes :py:class:`DigitalInput`
 and :py:class:`DigitalOutput` (they will ease the transition for Arduino fans ;). IO instances
@@ -60,6 +59,8 @@ __author__ = 'Eric PASCUAL for POBOT'
 __version__ = '2.0.0'
 __email__ = 'eric@pobot.org'
 
+__all__ = ['IOPiBoard', 'Expander', 'Port', 'DigitalInput', 'DigitalOutput']
+
 
 class IOPiBoard(object):
     """ This class represents a whole IOPi expansion board.
@@ -98,7 +99,7 @@ class IOPiBoard(object):
         )
         self._ios = {}
 
-    def _get_io(self, expander_num, board_io_num, direction, pullup_enabled=False):
+    def _get_io(self, expander_num, board_io_num, direction, pullup_enabled=False, default_state=0):
         if expander_num not in (self.EXPANDER_1, self.EXPANDER_2):
             raise ValueError("invalid expander num (%d)" % expander_num)
         if not 1 <= board_io_num <= 16:
@@ -117,7 +118,7 @@ class IOPiBoard(object):
             if direction == IO.DIR_INPUT:
                 io = DigitalInput(port, io_num, pullup_enabled=pullup_enabled)
             else:
-                io = DigitalOutput(port, io_num)
+                io = DigitalOutput(port, io_num, default_state=default_state)
             # cache the result
             self._ios[key] = io
         return io
@@ -133,14 +134,15 @@ class IOPiBoard(object):
         """
         return self._get_io(expander_num, board_io_num, direction=IO.DIR_INPUT, pullup_enabled=pullup_enabled)
 
-    def get_digital_output(self, expander_num, board_io_num):
+    def get_digital_output(self, expander_num, board_io_num, default_state=0):
         """ Factory method returning a DigitalOutput instance for a given IO.
         :param int expander_num: IOPiBoard.EXPANDER_1 or IOPiBoard.EXPANDER_2
         :param int board_io_num: the pin number of the IO on the expander header
+        :param int default_state: the output default state
         :return: the IO object
         :rtype: DigitalOutput
         """
-        return self._get_io(expander_num, board_io_num, direction=IO.DIR_OUTPUT)
+        return self._get_io(expander_num, board_io_num, direction=IO.DIR_OUTPUT, default_state=default_state)
 
     def read(self):
         """ Reads all ports of all expanders and returns their values as a single 32 bits integer.
@@ -532,12 +534,20 @@ class DigitalInput(IO, _ReadableIOMixin):
 
 class DigitalOutput(IO, _ReadableIOMixin):
     """ A specialized IO modeling an output."""
-    def __init__(self, port, num):
+    def __init__(self, port, num, default_state=0):
         """
         :param Port port: the port this IO belongs to
         :param int num: the IO number ([0-7])
+        :param int default_state: state of the output at initialization
         """
         super(DigitalOutput, self).__init__(port, num, is_input=False)
+        self._default_state = default_state
+
+        # create a reset method, which is an alias of set or clear depending
+        # on the initial state.
+        # This avoids testing the default_state attribute each time a reset
+        # is requested.
+        self.reset = self.set if default_state else self.clear
 
     def set(self):
         """ Turns the output high."""
@@ -546,3 +556,7 @@ class DigitalOutput(IO, _ReadableIOMixin):
     def clear(self):
         """ Turns the output low."""
         self._port.write(self._port.read() & (~ self._mask))
+
+    @property
+    def default_state(self):
+        return self._default_state
