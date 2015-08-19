@@ -240,8 +240,11 @@ class AnalogInput(object):
         :return: the input raw value
         :rtype: int
         """
-        while True:
-            raw = self._converter.read_raw(self._config, self._reply_len)
-            cfg = raw[-1]
-            if not(cfg & self.NOT_READY):
-                return self._decoder(self, raw)
+        try:
+            while True:
+                raw = self._converter.read_raw(self._config, self._reply_len)
+                cfg = raw[-1]
+                if not(cfg & self.NOT_READY):
+                    return self._decoder(self, raw)
+        except KeyboardInterrupt:
+            return 0
