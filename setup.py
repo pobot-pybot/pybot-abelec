@@ -5,7 +5,7 @@ from setuptools import setup, find_packages
 
 setup(name='pybot_abelec',
       namespace_packages=['pybot'],
-      version='1.0',
+      version='1.0.1',
       description='Support for AB Electronics Raspberry expansion boards',
       install_requires=['pybot_core'],
       extra_requires={
