@@ -42,6 +42,8 @@ __author__ = 'Eric PASCUAL for POBOT'
 __version__ = '2.0.0'
 __email__ = 'eric@pobot.org'
 
+__all__ = ['ADCPiBoard', 'Converter', 'AnalogInput']
+
 
 class ADCPiBoard(object):
     """ This class models an ADCPi board.

@@ -24,7 +24,6 @@ Definitions from the ``control`` package module are not exported at the package 
 importing both modules when the application needs the ``core`` only.
 
 It is perfectly valid to work with the base layer only for simple needs.
-
 """
 
 __author__ = 'Eric Pascual'

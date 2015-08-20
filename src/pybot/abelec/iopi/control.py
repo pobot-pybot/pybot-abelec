@@ -13,7 +13,6 @@ from collections import namedtuple
 
 from .base import *
 
-from pybot.abelec import iopi
 try:
     from pybot.raspi import i2c_bus
 except ImportError:
@@ -103,7 +102,7 @@ class IOPiController(object):
             raise ValueError('cannot continue since not running on a real RaspberryPi')
 
         # suppose I2C addresses are configured in sequence
-        self._board = board = iopi.IOPiBoard(i2c_bus, exp1_addr=self._i2c_address, exp2_addr=self._i2c_address+1)
+        self._board = board = IOPiBoard(i2c_bus, exp1_addr=self._i2c_address, exp2_addr=self._i2c_address+1)
 
         # create input instances for those requested and index them by their name
         self._inputs = dict((
@@ -215,7 +214,7 @@ class IOPiController(object):
         read on the previous polling. Most of the time this is accurate enough, knowing that a better
         precision can be achieved by reducing the polling period in the configuration parameters.
 
-        The notification callback provided by the application must accept two parameters:
+        The notification callbacks provided by the application must accept two parameters:
 
             name
                 (string) the name of the IO which state has changed
@@ -223,7 +222,7 @@ class IOPiController(object):
             state
                 (boolean) its new state
 
-        :param notification_callbacks: a tuple containing the callbacks for inputs and outputs changes
+        :param notification_callbacks: a tuple containing the callbacks for inputs and outputs changes notification
         """
         all_states = self._board.read()
         cb_input_changed, cb_output_changed = notification_callbacks
